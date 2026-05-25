@@ -1,0 +1,44 @@
+# Hertford room and source mapping.
+#
+# `rooms` and `sources` are lookup tables shared by the guest UI and the API.
+# Order in each list controls display order in the UI.
+
+rooms:
+  - id: lounge
+    label: Lounge
+    output: 1
+    visibility: guest
+  - id: red-room
+    label: Red Room
+    output: 4
+    visibility: guest
+  - id: grey-room
+    label: Grey Room
+    output: 5
+    visibility: guest
+  - id: office-tv
+    label: Office TV
+    output: 2
+    visibility: admin
+  - id: office-cnn
+    label: Office CNN
+    output: 3
+    visibility: admin
+  - id: output6
+    label: Output 6
+    output: 6
+    visibility: admin
+
+sources:
+  - id: apple-tv
+    label: Apple TV
+    input: 3
+  - id: freesat
+    label: Freesat
+    input: 2
+  - id: google-tv
+    label: Google TV
+    input: 4
+  - id: cnn-hd
+    label: CNN HD
+    input: 1

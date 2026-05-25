@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block title %}Hertford · admin{% endblock %}
+{% block body %}
+  <h1>Hertford · admin</h1>
+  <p class="sub">
+    Signed in via Cloudflare Access as
+    <code>{{ cf_user }}</code>
+  </p>
+
+  {% if status.ok %}
+    <table>
+      <thead>
+        <tr><th>Room</th><th>Visibility</th><th>Source</th><th>Output</th></tr>
+      </thead>
+      <tbody>
+      {% for row in status.rows %}
+        <tr>
+          <td>{{ row.room.label }}</td>
+          <td><span class="badge">{{ row.room.visibility }}</span></td>
+          <td>
+            {% if row.source %}
+              {{ row.source.label }}
+            {% else %}
+              <span class="badge">input {{ row.raw_input }}</span>
+            {% endif %}
+          </td>
+          <td>{{ row.room.output }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="err">matrix unreachable: {{ status.error }}</p>
+  {% endif %}
+{% endblock %}

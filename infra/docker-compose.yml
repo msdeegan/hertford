@@ -1,0 +1,46 @@
+# Hertford stack: FastAPI app + Cloudflare Tunnel sidecar.
+#
+# Deploy on the Synology by copying this directory plus ../backend and
+# ../config to /volume1/docker/hertford and running:
+#     docker compose up -d --build
+#
+# Required env vars in .env (see .env.example):
+#   GUEST_PASSWORD, MATRIX_HOST, TUNNEL_TOKEN
+# Optional:
+#   TAPO_EMAIL, TAPO_PASSWORD, TAPO_HOST, MATRIX_PORT
+
+services:
+  hertford:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: hertford:latest
+    container_name: hertford
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ../config:/config:ro
+    expose:
+      - "8000"
+    networks:
+      - hertford
+    # The matrix and Tapo plug live on the host LAN (192.168.8.0/24).
+    # Default bridge networking lets the container reach them via the host
+    # gateway, so no special network_mode is needed.
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hertford-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      hertford:
+        condition: service_healthy
+    networks:
+      - hertford
+
+networks:
+  hertford:
+    driver: bridge

@@ -6,8 +6,8 @@ full control of the matrix plus smart plug/light control.
 
 ## Status
 
-Phase A — standalone matrix + Tapo clients you can run against the LAN to
-validate hardware before any web stack is built.
+Phase B — FastAPI skeleton + Docker stack ready to deploy to Synology behind
+a Cloudflare Tunnel.
 
 ## Architecture (target)
 
@@ -28,11 +28,13 @@ Synology NAS (Docker)
 
 Phases:
 
-1. **A — Hardware clients.** *(this commit)* `hertford.matrix` and
-   `hertford.tapo` as runnable modules with small CLIs.
-2. **B — Infra.** FastAPI skeleton, Dockerfile, docker-compose with
-   cloudflared, deployed to Synology.
-3. **C — Guest UI.** Room selector → source buttons → TV power → Wi-Fi info.
+1. **A — Hardware clients.** ✅ `hertford.matrix` and `hertford.tapo` as
+   runnable modules with small CLIs.
+2. **B — Infra.** ✅ FastAPI skeleton, Dockerfile, docker-compose with
+   cloudflared. Routes: `/` (live status), `/admin` (CF Access user echoed),
+   `/api/status` (JSON), `/healthz`.
+3. **C — Guest UI.** Room selector → source buttons → TV power → Wi-Fi info,
+   shared password auth.
 4. **D — Admin UI.** Matrix grid, presets, command log, password rotation.
 
 ## Phase A — running locally
@@ -112,5 +114,84 @@ Inputs (sources):
 | apple-tv  | 3     |
 | google-tv | 4     |
 
-These will move to `config/rooms.yaml` in Phase B; for now the CLI takes raw
-numbers.
+Canonical mapping lives in [config/rooms.yaml](config/rooms.yaml); each room
+also has a `visibility` of `guest` or `admin` which controls who sees it.
+
+## Phase B — deploying to Synology
+
+The stack is two containers behind a Cloudflare Tunnel:
+[infra/docker-compose.yml](infra/docker-compose.yml).
+
+### 1. Create the Cloudflare Tunnel
+
+In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/):
+
+1. **Networks → Tunnels → Create a tunnel.** Pick "Cloudflared" as the
+   connector type. Name it `hertford`.
+2. On the "Install and run connector" step, select the **Docker** tab. Copy
+   the `TUNNEL_TOKEN` value (the long string after `--token`) — you'll paste
+   it into `.env`. Ignore the suggested `docker run` command; compose handles
+   that.
+3. **Public hostnames → Add a public hostname.**
+   - Subdomain: blank (or whatever you want — e.g. `house`)
+   - Domain: `hertford.info`
+   - Service: `HTTP` → `hertford:8000`
+
+   (Compose puts the FastAPI container on a network where it's reachable as
+   the hostname `hertford` on port 8000.)
+
+### 2. Add a Cloudflare Access policy for `/admin`
+
+In Zero Trust:
+
+1. **Access → Applications → Add an application → Self-hosted.**
+2. Application domain: `hertford.info`, path: `/admin*`.
+3. Add a policy that allows your email (and any other admins) — e.g.
+   "Emails: matt.deegan@gmail.com".
+4. Leave everything else default. Save.
+
+Now `https://hertford.info/admin` will require a one-time email login through
+Cloudflare; `https://hertford.info/` stays public (will be guest-password
+gated in Phase C).
+
+### 3. Set up the Synology
+
+On the NAS, install **Container Manager** from Package Center if you haven't
+already, then enable SSH (Control Panel → Terminal & SNMP → Enable SSH).
+
+```bash
+ssh msdeegan@192.168.8.237
+sudo -i
+
+# Pick a folder; convention on Synology is /volume1/docker/<app>
+mkdir -p /volume1/docker
+cd /volume1/docker
+git clone https://github.com/msdeegan/hertford.git
+cd hertford/infra
+cp .env.example .env
+nano .env   # paste TUNNEL_TOKEN, set GUEST_PASSWORD, TAPO_EMAIL, TAPO_PASSWORD
+docker compose up -d --build
+```
+
+### 4. Verify
+
+```bash
+docker compose ps                              # both containers Up + healthy
+docker compose logs -f hertford                # FastAPI logs
+docker compose logs -f cloudflared             # tunnel connection logs
+curl http://localhost/healthz                  # not exposed by compose; use docker exec
+docker exec hertford curl -s http://127.0.0.1:8000/api/status
+```
+
+Then in a browser: `https://hertford.info/` should show the status table,
+and `https://hertford.info/admin` should prompt for Cloudflare Access login
+then echo your email.
+
+### Updating
+
+```bash
+cd /volume1/docker/hertford
+git pull
+cd infra
+docker compose up -d --build
+```
