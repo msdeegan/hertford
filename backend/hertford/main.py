@@ -43,11 +43,15 @@ async def lifespan(app: FastAPI):
         app.state.tapo = None
         log.info("tapo not configured (TAPO_EMAIL/PASSWORD missing) — TV System button will be disabled")
 
-    # Home public IP, used to auto-auth visitors on the same WAN.
-    app.state.home_ip = cfg.home_public_ip
+    # Home public networks, used to auto-auth visitors on the same WAN.
+    # Each entry is an ipaddress network (IPv4 /32, IPv6 /64).
+    app.state.home_networks = _parse_home_networks_env(cfg.home_public_ip)
     refresh_task: asyncio.Task | None = None
-    if cfg.home_public_ip:
-        log.info("home public IP from HOME_PUBLIC_IP env: %s", cfg.home_public_ip)
+    if app.state.home_networks:
+        log.info(
+            "home networks from HOME_PUBLIC_IP env: %s",
+            [str(n) for n in app.state.home_networks],
+        )
     else:
         refresh_task = asyncio.create_task(_refresh_home_ip_loop(app))
 
@@ -61,31 +65,71 @@ async def lifespan(app: FastAPI):
 
 
 async def _refresh_home_ip_loop(app: FastAPI) -> None:
-    """Detect the home's public IP from the NAS's own outbound traffic.
+    """Detect the home's public IPv4 + IPv6 networks from outbound traffic.
 
-    The NAS lives on the home LAN, so its public-facing IP IS the home's
-    public IP. Re-checks every hour so dynamic-IP changes self-heal.
+    The NAS lives on the home LAN, so its public-facing IPs ARE the home's.
+    For IPv4 every device on the WAN looks like one /32; for IPv6 every
+    device gets a unique address inside the ISP-assigned /64, so we match by
+    prefix.
+
+    Re-checks every hour so dynamic-IP changes self-heal.
     """
+    import ipaddress
+
     import aiohttp
 
     while True:
+        nets: list[ipaddress._BaseNetwork] = []
         try:
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=5)
             ) as session:
-                async with session.get("https://api.ipify.org") as resp:
-                    new_ip = (await resp.text()).strip()
-            old = getattr(app.state, "home_ip", None)
-            if new_ip and new_ip != old:
-                log.info(
-                    "home public IP %s: %s",
-                    "detected" if not old else f"changed from {old} to",
-                    new_ip,
-                )
-                app.state.home_ip = new_ip
+                for url in ("https://api.ipify.org", "https://api64.ipify.org"):
+                    try:
+                        async with session.get(url) as resp:
+                            ip_str = (await resp.text()).strip()
+                        addr = ipaddress.ip_address(ip_str)
+                        prefix = 32 if isinstance(addr, ipaddress.IPv4Address) else 64
+                        net = ipaddress.ip_network(f"{addr}/{prefix}", strict=False)
+                        if net not in nets:
+                            nets.append(net)
+                    except Exception as inner:
+                        log.warning("IP probe %s failed: %s", url, inner)
+            if nets:
+                old = getattr(app.state, "home_networks", []) or []
+                if {str(n) for n in nets} != {str(n) for n in old}:
+                    log.info(
+                        "home networks %s: %s",
+                        "detected" if not old else "updated",
+                        [str(n) for n in nets],
+                    )
+                    app.state.home_networks = nets
         except Exception as e:
-            log.warning("public IP detection failed: %s", e)
+            log.warning("home network detection failed: %s", e)
         await asyncio.sleep(3600)
+
+
+def _parse_home_networks_env(value: str | None) -> list:
+    """Parse comma-separated CIDRs / bare IPs from the HOME_PUBLIC_IP env var."""
+    import ipaddress
+
+    if not value:
+        return []
+    out = []
+    for piece in value.split(","):
+        s = piece.strip()
+        if not s:
+            continue
+        try:
+            if "/" in s:
+                out.append(ipaddress.ip_network(s, strict=False))
+            else:
+                addr = ipaddress.ip_address(s)
+                prefix = 32 if isinstance(addr, ipaddress.IPv4Address) else 64
+                out.append(ipaddress.ip_network(f"{addr}/{prefix}", strict=False))
+        except ValueError as e:
+            log.warning("ignoring bad HOME_PUBLIC_IP entry %r: %s", s, e)
+    return out
 
 
 app = FastAPI(title="Hertford", lifespan=lifespan)

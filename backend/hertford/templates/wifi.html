@@ -19,11 +19,14 @@
     </div>
   {% else %}
     {% if qr_svg %}
-      <div class="bg-white border border-slate-200 rounded-2xl p-6 flex items-center justify-center">
-        <div class="w-full max-w-xs">
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-center">
+        <div class="qr-wrap w-full max-w-xs">
           {{ qr_svg | safe }}
         </div>
       </div>
+      <style>
+        .qr-wrap svg { width: 100%; height: auto; display: block; }
+      </style>
     {% endif %}
 
     <dl class="mt-6 space-y-3">

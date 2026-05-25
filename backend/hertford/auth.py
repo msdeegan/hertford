@@ -15,6 +15,7 @@ Two kinds of auth:
 
 from __future__ import annotations
 
+import ipaddress
 import secrets
 
 from fastapi import Request
@@ -33,17 +34,24 @@ def is_guest_authed(request: Request) -> bool:
 
 
 def is_on_home_network(request: Request) -> bool:
-    """True if the request's CF-Connecting-IP matches the home's public IP.
+    """True if CF-Connecting-IP falls inside one of the home's public networks.
 
     Cloudflare puts the original visitor's IP in CF-Connecting-IP on tunneled
-    requests. The NAS's own public-facing IP is the home's public IP, so
-    visitors connecting from the same WAN show up with that IP.
+    requests. We compare against a list of CIDRs detected at startup from the
+    NAS's own public addresses (IPv4 /32 and IPv6 /64 from the ISP prefix —
+    every device on the home WAN sits in the same /64).
     """
-    home_ip = getattr(request.app.state, "home_ip", None)
-    if not home_ip:
+    home_nets = getattr(request.app.state, "home_networks", None)
+    if not home_nets:
         return False
     cf_ip = request.headers.get("CF-Connecting-IP")
-    return bool(cf_ip) and cf_ip == home_ip
+    if not cf_ip:
+        return False
+    try:
+        addr = ipaddress.ip_address(cf_ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in home_nets)
 
 
 def grant_guest(request: Request) -> None:
