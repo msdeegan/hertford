@@ -1,0 +1,188 @@
+              C66CS 6x6 HDBaseT Matrix
+             
+
+
+============= System Information Commands
+?/HELP        Print Help Information
+STATUS        Print System Status And Port Status
+INSTA         Print All Input Status
+OUTSTA        Print All Output Status
+CTRLSTA       Print All Control Status
+PRESETSTATUS  Print All Preset Configurations
+FWVERSION     Print FW Version
+============= System Control Commands
+PON/OFF       Set System Power On Or Off
+KEY ON/OFF    Set System Key Control On Or Off
+IR ON/OFF     Set System Front Panel IR Control On Or Off
+LCD ON/OFF    Set LCD Always On Or Set LCD Off After No Operation 30 Seconds
+IROUTxx ON    Enable IR Remote-control Mode On HDBT Output xx
+IROUTxx OFF   Disable IR Remote-control Mode On HDBT Output xx
+RESET         Reset System To Default Setting
+              (Type "Yes" To Confirm, Or Send Other Command To Discard)
+OUTxx EH      Priority Output for EDID Copy and CEC = HDMI
+OUTxx ET      Priority Output for EDID Copy and CEC = HDBT
+              xx = [00-01] : Output 1
+POCOUTxx ON   Set PoC On On Output xx
+POCOUTxx OFF  Set PoC Off On Output xx
+OUT xx GUEST ON     Set System Guest Mode xx On
+OUT xx GUEST OFF    Set System Guest Mode xx Off
+              (Please note, this will disconnect any active telnet connections t                                                                                                             o this matrix)
+OUTxx ON      Set Output xx On
+OUTxx OFF     Set Output xx Off
+OUTxx FR yy   Set Output xx From Input yy
+              xx = 00 : All Outputs
+              xx = [01-06] : Output 1 - 6
+              yy = [01-06] : Input 1 - 6
+MXIR xx FR yy Local Matrix IR Out xx From Remote Rx yy IR In
+              xx = [01-06] : Local IR Out 1 - 6
+              yy = [01-06] : Remote Rx IR In 1 - 6
+              yy = [00] : All Remote Rx IR In
+OUT xx SCALING ON/OFF  Set Output xx Scaling ON/OFF
+              xx = 00 : All Outputs
+              xx = [01-06] : Output 1 - 6
+IRFV ON/OFF   Local Matrix IR Out Follow Video Switching ON/OFF
+OUT xx IRHEXSEND b   Send Pronto Hex Code To Remote End
+              xx = 00 : All Outputs
+              xx = [01-06] : Output 1 - 6
+              b  = IR Value(Hex Format)
+EDID xx DF zz Set Input xx EDID To Default EDID zz
+              xx = Input On Product (00 Refers To ALL Inputs, 02 = Input 2 Etc)
+              zz = 00: HDMI 1080p@60Hz, Audio 2CH PCM (Default)
+                   01: HDMI 1080p@60Hz, Audio 5.1CH DTS/DOLBY
+                   02: HDMI 1080p@60Hz, Audio 7.1CH DTS/DOLBY/HD
+                   03: HDMI 1080i@60Hz, Audio 2CH PCM
+                   04: HDMI 1080i@60Hz, Audio 5.1CH DTS/DOLBY
+                   05: HDMI 1080i@60Hz, Audio 7.1CH DTS/DOLBY/HD
+                   06: HDMI 1080p@60Hz/3D, Audio 2CH PCM
+                   07: HDMI 1080p@60Hz/3D, Audio 5.1CH DTS/DOLBY
+                   08: HDMI 1080p@60Hz/3D, Audio 7.1CH DTS/DOLBY/HD
+                   09: HDMI 4K@30Hz 4:4:4, Audio 2CH PCM
+                   10: HDMI 4K@30Hz 4:4:4, Audio 5.1CH DTS/DOLBY
+                   11: HDMI 4K@30Hz 4:4:4, Audio 7.1CH DTS/DOLBY/HD
+                   12: HDMI 4K@60Hz 4:2:0/4K@30Hz 4:4:4, Audio 2CH PCM
+                   13: HDMI 4K@60Hz 4:2:0/4K@30Hz 4:4:4, Audio 5.1CH DTS/DOLBY
+                   14: HDMI 4K@60Hz 4:2:0/4K@30Hz 4:4:4, Audio 7.1CH DTS/DOLBY/H                                                                                                             D
+                   15: HDMI 4K@60Hz 4:4:4, Audio 2CH PCM
+                   16: HDMI 4K@60Hz 4:4:4, Audio 5.1CH DTS/DOLBY
+                   17: HDMI 4K@60Hz 4:4:4, Audio 7.1CH DTS/DOLBY/HD
+                   18: DVI 1280x1024@60Hz, Audio None
+                   19: DVI 1920x1080@60Hz, Audio None
+                   20: DVI 1920x1200@60Hz, Audio None
+                   21: HDMI 1920x1200@60Hz, Audio 2CH PCM/6CH PCM
+                   22: User EDID 1
+                   23: User EDID 2
+EDID xx CP yy Copy EDID From Output yy To Input xx
+              xx = [00-06] : 00 : All Inputs, Input 1 - 6
+              yy = [01-06] : Output 1 - 6
+EDID SAVE yy TO zz  Save External EDID yy Into Slot zz
+              yy = [01-06]: EDID Copy Output 1 - 6
+              yy = 00: EDID Via RS232 Send To Matrix
+              zz = 00: All User EDID
+              zz = 01 or 22: User EDID 1
+              zz = 02 or 23: User EDID 2
+PRESET pp SAVE     Save Current Output Connections To Preset pp Config
+PRESET pp CLR      Delete Preset pp Config
+              pp = [00-09] : 00 : All Presets, Preset 1 - 9
+PRESET pp APPLY    Apply Preset pp Config To Output Connection
+              pp = [01-09] : Presets 1 - 9
+============= Output CEC Control Commands
+OUTxx CEC OK       Confirm Operation (Enter) On Output xx
+OUTxx CEC UP       UP On Output xx
+OUTxx CEC DOWN     DOWN On Output xx
+OUTxx CEC LEFT     LEFT On Output xx
+OUTxx CEC RIGHT    RIGHT On Output xx
+OUTxx CEC RETURN   RETURN On Output xx
+OUTxx CEC EXIT     EXIT On Output xx
+OUTxx CEC VOLUP    VOLUME UP On Output xx
+OUTxx CEC VOLDOWN  VOLUME DOWN On Output xx
+OUTxx CEC MUTE     Toggle Audio MUTE Status On Output xx
+OUTxx CEC PLAY     PLAY On Output xx
+OUTxx CEC STOP     STOP On Output xx
+OUTxx CEC PAUSE    PAUSE On Output xx
+OUTxx CEC RECORD   RECORD On Output xx
+OUTxx CEC INPUTyy  Input Channel yy Selection On Output xx,
+              The Operation Needs To Wait For TV Communication To Succeed
+              xx= 00: All Output Port
+              xx= [01-06]: Output 1 - 6
+              yy= [01-04]: TV's HDMI Input 1 - 4
+              yy= [00]: Current HDMI Input
+              yy= []:(No Parameter) Will Show Input Select Menu If TV Support
+OUTxx CEC POFF     POWER OFF On Output xx
+OUTxx CEC PON      POWER ON On Output xx
+              xx= 00: All Output Port
+              xx= [01-06]: Output 1 - 6
+============= Input CEC Control Commands
+INxx CEC OK        Confirm Operation (Enter) On Input xx
+INxx CEC UP        UP On Input xx
+INxx CEC DOWN      DOWN On Input xx
+INxx CEC LEFT      LEFT On Input xx
+INxx CEC RIGHT     RIGHT On Input xx
+INxx CEC RETURN    RETURN On Input xx
+INxx CEC EXIT      EXIT On Input xx
+INxx CEC VOLUP     VOLUME UP On Input xx
+INxx CEC VOLDOWN   VOLUME DOWN On Input xx
+INxx CEC PLAY      PLAY On Input xx
+INxx CEC STOP      STOP On Input xx
+INxx CEC PAUSE     PAUSE On Input xx
+INxx CEC RECORD    RECORD On Input xx
+INxx CEC REWIND    REWIND On Input xx
+INxx CEC FF        FAST FORWARD On Input xx
+INxx CEC FWD       FORWARD On Input xx
+INxx CEC BWD       BACKWARD On Input xx
+INxx CEC POFF      POWER OFF On Input xx
+INxx CEC PON       POWER ON On Input xx
+              xx= 00: All Input Port
+              xx= [01-06]: Input 1 - 6
+============= RS232 User CEC Commands
+CECUSERCMD <u8DevID u8Addr u8Opcode pu8Operand[MAX]>
+              u8DevID: 00  Select All CEC Input Port
+              u8DevID: [01-06] Input 1 - 6
+              u8DevID: F0  Select All CEC Output Port
+              u8DevID: [F1-F6] Output 1 - 6
+              pu8Operand[MAX] : MAX  0 - 14
+              Eg:CECUSERCMD <F0 40 44 41 > (ALL OUT CEC VOLUP)
+              Eg:CECUSERCMD <F0 40 44 42 > (ALL OUT CEC VOLDOWN)
+============= RS232 Control Commands
+RS232BAUD z   Set RS232 Baud Rate To xx
+              z = 1 2400, 2 4800, 3 9600, 4 19200, 5 38400, 6 57600 (Default), 7                                                                                                              115200
+OUT xx RS232SEND yy:z:a:b    Send b To RS232 Port xx And Wait yy Seconds For Fee                                                                                                             dback
+              xx= 00 : Local RS232 Port
+              xx= [01-06] : Output 1 - 6
+              yy= [00-10] : Wait For The Feedback yy Seconds
+              z = a ASCII, h HEX
+              a = 1 2400, 2 4800, 3 9600, 4 19200, 5 38400, 6 57600 (Default), 7                                                                                                              115200
+              b = RS232 command
+RS232DLYOUTxx:tt   Set Send Output xx Interval Time In tt Seconds Between RS232                                                                                                              On And User Commands
+              xx= 00: All Output Port
+              xx= [01-06]: Output 1 - 6
+              tt= [0-180]: Delay tt Seconds
+RS232OUTxx ON :Enable RS232 Remote-control Mode On HDBT Output xx
+RS232OUTxx OFF:Disable RS232 Remote-control Mode On HDBT Output xx
+RS232ONOUTxx y:z:a:b Save y Type Of Command a Stored In Slot x Whose Baud Rate I                                                                                                             s z On Output xx
+              xx= 00: All Output Port
+              xx= [01-06]: Output 1 - 6
+              y = 1 RS232 Display On
+              y = 2 RS232 Display Input Select
+              y = 3 RS232 User Command 1
+              y = 4 RS232 User Command 2
+              y = 5 RS232 User Command 3
+              z = a ASCII, h HEX
+              a = 1 2400, 2 4800, 3 9600, 4 19200, 5 38400, 6 57600 (Default), 7                                                                                                              115200
+              b = RS232 Command
+RS232OFFOUTxx z:a:b Save RS232 Off Command a Of y Type Whose Baud Rate Is z On O                                                                                                             utput xx
+              z = a ASCII, h HEX
+              a = 1 2400, 2 4800, 3 9600, 4 19200, 5 38400, 6 57600 (Default), 7                                                                                                              115200
+              b = RS232 Command
+RS232ONOUTxx  DISABLE  Disable Auto RS232 Commands When Detecting A Signal On Ou                                                                                                             tput xx
+RS232OFFOUTxx DISABLE  Disable Auto RS232 Commands When Not Detecting A Signal O                                                                                                             n Output xx
+              xx= 00: All Output Port
+              xx= [01-06]: Output 1 - 6
+============= Network Control Commands
+NET DHCP ON/OFF  Set Auto IP(DHCP) On Or Off
+NET TN ON/OFF     Set Telnet Port On Or Off
+NET MDNS ON/OFF   Set mDNS On Or Off
+NET IP xxx.xxx.xxx.xxx  Set IP Address
+NET GW xxx.xxx.xxx.xxx  Set Gateway Address
+NET SM xxx.xxx.xxx.xxx  Set Subnet Mask Address
+NET RB                  Set Network Reboot And Apply New Config!!!
+NET TN xxxx             Set Telnet Port
