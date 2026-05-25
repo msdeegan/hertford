@@ -96,6 +96,9 @@ class TapoPlug:
     async def on(self) -> None:
         device = await self._open()
         try:
+            # update() lazily initializes the OnOffComponent that turn_on
+            # delegates to — without it turn_on silently AttributeErrors.
+            await device.update()
             await device.turn_on()
         except Exception as e:
             raise TapoError(f"turn_on failed: {e}") from e
@@ -103,6 +106,7 @@ class TapoPlug:
     async def off(self) -> None:
         device = await self._open()
         try:
+            await device.update()
             await device.turn_off()
         except Exception as e:
             raise TapoError(f"turn_off failed: {e}") from e
