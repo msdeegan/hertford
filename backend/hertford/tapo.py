@@ -75,12 +75,14 @@ class TapoPlug:
         device = await self._open()
         await device.update()
         di = device.device_info
+        # `is_on` is a property on the device object, sourced from the
+        # OnOffComponent after update() — not present on DeviceInfo itself.
         return {
             "host": self._config.host,
             "model": getattr(di, "model", None),
             "nickname": getattr(di, "nickname", None),
             "device_id": getattr(di, "device_id", None),
-            "on": getattr(di, "device_on", None),
+            "on": bool(device.is_on),
             "overheated": getattr(di, "overheated", None),
             "signal_level": getattr(di, "signal_level", None),
             "rssi": getattr(di, "rssi", None),
@@ -89,7 +91,7 @@ class TapoPlug:
     async def is_on(self) -> bool:
         device = await self._open()
         await device.update()
-        return bool(getattr(device.device_info, "device_on", False))
+        return bool(device.is_on)
 
     async def on(self) -> None:
         device = await self._open()
