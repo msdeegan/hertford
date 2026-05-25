@@ -40,7 +40,10 @@
   <div class="space-y-3">
     {% for source in config.sources %}
       {% set is_current = current and current.id == source.id %}
-      {% set is_disabled = is_current or matrix_error %}
+      {% set has_signal = input_status.get(source.input, {}).get('hdmi_connected') %}
+      {# has_signal is True/False if we know, None if we couldn't query #}
+      {% set no_signal = has_signal is sameas false %}
+      {% set is_disabled = is_current or matrix_error or no_signal %}
       <form method="post" action="/room/{{ room.id }}/source/{{ source.id }}">
         <button
           type="submit"
@@ -50,6 +53,8 @@
                    bg-slate-900 text-white border-slate-900 cursor-default
                  {% elif matrix_error %}
                    bg-white border-slate-200 opacity-50 cursor-not-allowed
+                 {% elif no_signal %}
+                   bg-white border-slate-200 opacity-50 cursor-not-allowed
                  {% else %}
                    bg-white border-slate-200 active:bg-slate-100
                  {% endif %}"
@@ -58,6 +63,8 @@
             <span class="text-lg font-semibold">{{ source.label }}</span>
             {% if is_current %}
               <span class="text-xs font-medium uppercase tracking-wide opacity-70">Now playing</span>
+            {% elif no_signal %}
+              <span class="text-xs font-medium uppercase tracking-wide text-slate-400">No signal</span>
             {% endif %}
           </div>
         </button>

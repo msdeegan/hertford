@@ -35,6 +35,6 @@ sources:
   - id: google-tv
     label: Google TV
     input: 4
-  - id: cnn-hd
-    label: CNN HD
+  - id: bbc-news-hd
+    label: BBC News HD
     input: 1

@@ -367,6 +367,13 @@ async def room_picker(request: Request, room_id: str):
     routing, matrix_error = await _routing(request)
     current = cfg.source_by_input(routing.get(room.output)) if routing else None
 
+    input_status: dict[int, dict] = {}
+    if not matrix_error:
+        try:
+            input_status = await _matrix(request).input_status()
+        except MatrixError as e:
+            log.warning("input status failed: %s", e)
+
     tapo_on = None
     tapo_error = None
     if room.id == TAPO_ROOM_ID:
@@ -380,6 +387,7 @@ async def room_picker(request: Request, room_id: str):
             "room": room,
             "current": current,
             "matrix_error": matrix_error,
+            "input_status": input_status,
             "show_tapo": room.id == TAPO_ROOM_ID,
             "tapo_configured": _tapo(request) is not None,
             "tapo_on": tapo_on,

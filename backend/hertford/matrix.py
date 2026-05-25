@@ -184,6 +184,38 @@ class MatrixClient:
                 return m.group(1)
         return "unknown"
 
+    async def input_status(self) -> dict[int, dict]:
+        """Return per-input details from INSTA.
+
+        Each entry is {edid, hdmi_connected: bool, cec_in: bool}.
+        `hdmi_connected` is True when a source device is actively producing
+        video on that input (useful for "no signal" indicators).
+        """
+        body = await self.send("INSTA")
+        result: dict[int, dict] = {}
+        in_table = False
+        for line in body.splitlines():
+            if not in_table:
+                if re.match(r"\s*Input\s+Edid\b", line):
+                    in_table = True
+                continue
+            if not line.strip():
+                break
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            try:
+                inp = int(parts[0])
+            except ValueError:
+                continue
+            if 1 <= inp <= NUM_INPUTS:
+                result[inp] = {
+                    "edid": parts[1],
+                    "hdmi_connected": parts[2].upper() == "ON",
+                    "cec_in": parts[3].upper() == "ON",
+                }
+        return result
+
     async def status(self) -> dict[int, int]:
         """Return {output: input} routing table parsed from OUTSTA.
 
