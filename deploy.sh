@@ -7,6 +7,11 @@
 # Or remotely from anywhere with SSH access:
 #     ssh msdeegan@192.168.8.237 'cd /volume1/docker/hertford && ./deploy.sh'
 #
+# Prereq for non-interactive ssh: passwordless sudo for the docker binary.
+# On the Synology, once:
+#   echo "$USER ALL=(root) NOPASSWD: /usr/local/bin/docker" | sudo tee /etc/sudoers.d/hertford
+#   sudo chmod 0440 /etc/sudoers.d/hertford
+#
 # Environment overrides:
 #   HERTFORD_BRANCH   git branch to pull from (default: dev)
 #   HERTFORD_REPO_URL tarball URL (default: github.com/msdeegan/hertford)
@@ -31,10 +36,10 @@ fi
 
 echo "→ rebuilding and restarting"
 cd infra
-docker compose up -d --build
+sudo docker compose up -d --build
 
 echo "→ status"
-docker compose ps
+sudo docker compose ps
 
 echo "→ recent hertford logs"
-docker compose logs --tail=10 hertford
+sudo docker compose logs --tail=10 hertford
