@@ -1,0 +1,62 @@
+{% extends "_base.html" %}
+{% block title %}Hertford{% endblock %}
+{% block body %}
+  <header class="flex items-baseline justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Hertford</h1>
+      {% if is_admin_view %}
+        <p class="text-xs text-slate-500 mt-0.5">admin · {{ cf_user }}</p>
+      {% endif %}
+    </div>
+    {% if not is_admin_view %}
+      <form method="post" action="/logout">
+        <button class="text-sm text-slate-500 active:text-slate-900">Sign out</button>
+      </form>
+    {% endif %}
+  </header>
+
+  {% if matrix_error %}
+    <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
+      Matrix unreachable: {{ matrix_error }}
+    </div>
+  {% endif %}
+
+  <div class="space-y-3">
+    {% for tile in tiles %}
+      <a
+        href="/room/{{ tile.room.id }}"
+        class="block bg-white rounded-2xl shadow-sm border border-slate-200 p-4 active:bg-slate-100 active:scale-[0.99] transition-transform"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-lg font-semibold">{{ tile.room.label }}</div>
+            <div class="text-slate-500 text-sm mt-0.5">
+              {% if tile.source %}
+                {{ tile.source.label }}
+              {% elif tile.raw_input %}
+                input {{ tile.raw_input }}
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+    {% endfor %}
+
+    <a
+      href="/info"
+      class="block bg-white rounded-2xl shadow-sm border border-slate-200 p-4 active:bg-slate-100"
+    >
+      <div class="flex items-center justify-between">
+        <div class="text-lg font-semibold">House info</div>
+        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </a>
+  </div>
+{% endblock %}

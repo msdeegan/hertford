@@ -2,28 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f172a">
   <title>{% block title %}Hertford{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-           max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-    h1 { margin-bottom: 0.25rem; }
-    .sub { color: #666; margin-top: 0; font-size: 0.9rem; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
-    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; }
-    th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase; color: #888; }
-    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem;
-             font-size: 0.75rem; background: #eef; color: #336; }
-    .ok    { color: #2a7a2a; }
-    .err   { color: #b33; }
-    footer { margin-top: 3rem; font-size: 0.8rem; color: #888; }
-    code { background: #f4f4f4; padding: 0.1rem 0.3rem; border-radius: 0.2rem; }
+    /* prevent rubber-banding on iOS so the page feels app-like */
+    html, body { overscroll-behavior: none; }
+    /* visually hide but keep accessible for screen readers */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   </style>
 </head>
-<body>
-  {% block body %}{% endblock %}
-  <footer>
-    Hertford · phase B skeleton · <code>{{ config.matrix_host }}</code>
-  </footer>
+<body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
+  <div class="max-w-md mx-auto px-4 py-6 pb-24">
+    {% block body %}{% endblock %}
+  </div>
 </body>
 </html>

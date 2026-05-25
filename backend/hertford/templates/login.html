@@ -1,0 +1,34 @@
+{% extends "_base.html" %}
+{% block title %}Hertford · sign in{% endblock %}
+{% block body %}
+  <div class="pt-12">
+    <h1 class="text-3xl font-bold tracking-tight">Hertford</h1>
+    <p class="text-slate-600 mt-1">Sign in to control the house.</p>
+
+    {% if error %}
+      <p class="mt-4 text-rose-600 text-sm">Wrong password — try again.</p>
+    {% endif %}
+
+    <form method="post" action="/login" class="mt-6 space-y-4">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="block">
+        <span class="sr-only">Password</span>
+        <input
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          autofocus
+          required
+          placeholder="Password"
+          class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+        >
+      </label>
+      <button
+        type="submit"
+        class="w-full py-3 rounded-xl bg-slate-900 text-white text-lg font-semibold active:bg-slate-700"
+      >
+        Sign in
+      </button>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "_base.html" %}
+{% block title %}{{ room.label }} · Hertford{% endblock %}
+{% block body %}
+  <header class="mb-6">
+    <a href="{{ back_url }}" class="inline-flex items-center text-sm text-slate-500 active:text-slate-900 -ml-1">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back
+    </a>
+    <h1 class="text-2xl font-bold tracking-tight mt-2">{{ room.label }}</h1>
+    <p class="text-slate-500 text-sm mt-0.5">
+      {% if current %}
+        Now playing: <span class="font-medium text-slate-700">{{ current.label }}</span>
+      {% else %}
+        Source unknown
+      {% endif %}
+    </p>
+  </header>
+
+  {% if matrix_error %}
+    <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
+      Matrix unreachable: {{ matrix_error }}
+    </div>
+  {% endif %}
+
+  <div class="space-y-3">
+    {% for source in config.sources %}
+      {% set is_current = current and current.id == source.id %}
+      <form method="post" action="/room/{{ room.id }}/source/{{ source.id }}">
+        <button
+          type="submit"
+          {% if is_current %}disabled{% endif %}
+          class="w-full text-left p-4 rounded-2xl border transition-transform active:scale-[0.99]
+                 {% if is_current %}
+                   bg-slate-900 text-white border-slate-900 cursor-default
+                 {% else %}
+                   bg-white border-slate-200 active:bg-slate-100
+                 {% endif %}"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-lg font-semibold">{{ source.label }}</span>
+            {% if is_current %}
+              <span class="text-xs font-medium uppercase tracking-wide opacity-70">Now playing</span>
+            {% endif %}
+          </div>
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+
+  {% if show_tapo %}
+    <div class="mt-8 pt-6 border-t border-slate-200">
+      {% if tapo_configured %}
+        <form method="post" action="/tapo/tv-system/toggle">
+          <button
+            type="submit"
+            class="w-full p-4 rounded-2xl border transition-transform active:scale-[0.99]
+                   {% if tapo_on %}
+                     bg-emerald-50 border-emerald-200 active:bg-emerald-100
+                   {% else %}
+                     bg-slate-100 border-slate-200 active:bg-slate-200
+                   {% endif %}"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-lg font-semibold">TV System</span>
+              <span class="flex items-center gap-2 text-sm font-medium">
+                <span class="w-2.5 h-2.5 rounded-full {% if tapo_on %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
+                {% if tapo_on is none %}
+                  {% if tapo_error %}Error{% else %}Unknown{% endif %}
+                {% elif tapo_on %}On — tap to turn off
+                {% else %}Off — tap to turn on
+                {% endif %}
+              </span>
+            </div>
+            {% if tapo_error %}
+              <div class="text-xs text-rose-600 mt-2">{{ tapo_error }}</div>
+            {% endif %}
+          </button>
+        </form>
+      {% else %}
+        <div class="p-4 rounded-2xl bg-slate-100 border border-slate-200 text-sm text-slate-500">
+          TV System control isn't configured. Set <code class="font-mono">TAPO_EMAIL</code> /
+          <code class="font-mono">TAPO_PASSWORD</code> in <code class="font-mono">.env</code>.
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

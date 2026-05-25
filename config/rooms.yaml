@@ -2,6 +2,10 @@
 #
 # `rooms` and `sources` are lookup tables shared by the guest UI and the API.
 # Order in each list controls display order in the UI.
+#
+# Outputs 3 (office-cnn, dedicated CNN screen) and 6 are real on the matrix
+# but intentionally not exposed in this UI — they're rarely switched. To
+# control them later, run from the CLI or add them back here.
 
 rooms:
   - id: lounge
@@ -16,17 +20,9 @@ rooms:
     label: Grey Room
     output: 5
     visibility: guest
-  - id: office-tv
-    label: Office TV
+  - id: office
+    label: Office
     output: 2
-    visibility: admin
-  - id: office-cnn
-    label: Office CNN
-    output: 3
-    visibility: admin
-  - id: output6
-    label: Output 6
-    output: 6
     visibility: admin
 
 sources:
