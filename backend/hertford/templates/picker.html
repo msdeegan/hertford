@@ -18,10 +18,17 @@
     </p>
   </header>
 
+  {% set initialising = show_tapo and tapo_on is sameas true and matrix_error %}
+
   {% if matrix_error %}
     {% if show_tapo and tapo_on is sameas false %}
       <div class="mb-4 p-3 rounded-xl bg-slate-100 text-slate-600 text-sm">
         Matrix is asleep because TV System is off — flip it on below to wake everything up.
+      </div>
+    {% elif initialising %}
+      <div class="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+        Matrix is booting… give it a few seconds.
       </div>
     {% else %}
       <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
@@ -33,13 +40,16 @@
   <div class="space-y-3">
     {% for source in config.sources %}
       {% set is_current = current and current.id == source.id %}
+      {% set is_disabled = is_current or matrix_error %}
       <form method="post" action="/room/{{ room.id }}/source/{{ source.id }}">
         <button
           type="submit"
-          {% if is_current %}disabled{% endif %}
+          {% if is_disabled %}disabled{% endif %}
           class="w-full text-left p-4 rounded-2xl border transition-transform active:scale-[0.99]
                  {% if is_current %}
                    bg-slate-900 text-white border-slate-900 cursor-default
+                 {% elif matrix_error %}
+                   bg-white border-slate-200 opacity-50 cursor-not-allowed
                  {% else %}
                    bg-white border-slate-200 active:bg-slate-100
                  {% endif %}"
@@ -62,7 +72,9 @@
           <button
             type="submit"
             class="w-full p-4 rounded-2xl border transition-transform active:scale-[0.99]
-                   {% if tapo_on %}
+                   {% if initialising %}
+                     bg-amber-50 border-amber-200 active:bg-amber-100
+                   {% elif tapo_on %}
                      bg-emerald-50 border-emerald-200 active:bg-emerald-100
                    {% else %}
                      bg-slate-100 border-slate-200 active:bg-slate-200
@@ -71,9 +83,13 @@
             <div class="flex items-center justify-between">
               <span class="text-lg font-semibold">TV System</span>
               <span class="flex items-center gap-2 text-sm font-medium">
-                <span class="w-2.5 h-2.5 rounded-full {% if tapo_on %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
+                <span class="w-2.5 h-2.5 rounded-full
+                  {% if initialising %}bg-amber-500 animate-pulse
+                  {% elif tapo_on %}bg-emerald-500
+                  {% else %}bg-slate-400{% endif %}"></span>
                 {% if tapo_on is none %}
                   {% if tapo_error %}Error{% else %}Unknown{% endif %}
+                {% elif initialising %}Initialising…
                 {% elif tapo_on %}On — tap to turn off
                 {% else %}Off — tap to turn on
                 {% endif %}
@@ -91,5 +107,27 @@
         </div>
       {% endif %}
     </div>
+  {% endif %}
+
+  {% if initialising %}
+    <script>
+      (function() {
+        var tries = 0;
+        function poll() {
+          tries++;
+          fetch('/api/status', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.matrix && d.matrix.ok) {
+                window.location.reload();
+              } else if (tries < 60) {  // give up after ~2 min
+                setTimeout(poll, 2000);
+              }
+            })
+            .catch(function() { if (tries < 60) setTimeout(poll, 3000); });
+        }
+        setTimeout(poll, 2000);
+      })();
+    </script>
   {% endif %}
 {% endblock %}
