@@ -16,6 +16,7 @@ api = [
     "pyjwt[crypto]>=2.9",
     "itsdangerous>=2.2",
     "python-multipart>=0.0.20",
+    "segno>=1.6",
 ]
 dev = [
     "pytest>=8.0",

@@ -1,0 +1,85 @@
+{% extends "_base.html" %}
+{% block title %}WiFi · Hertford{% endblock %}
+{% block body %}
+  <header class="mb-6">
+    <a href="/" class="inline-flex items-center text-sm text-slate-500 active:text-slate-900 -ml-1">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back
+    </a>
+    <h1 class="text-2xl font-bold tracking-tight mt-2">WiFi</h1>
+    <p class="text-slate-500 text-sm mt-0.5">Scan the QR with your phone camera, or type the password.</p>
+  </header>
+
+  {% if not wifi_ssid or not wifi_password %}
+    <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+      WiFi credentials aren't configured. Set <code class="font-mono">WIFI_SSID</code> and
+      <code class="font-mono">WIFI_PASSWORD</code> in <code class="font-mono">.env</code>.
+    </div>
+  {% else %}
+    {% if qr_svg %}
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 flex items-center justify-center">
+        <div class="w-full max-w-xs">
+          {{ qr_svg | safe }}
+        </div>
+      </div>
+    {% endif %}
+
+    <dl class="mt-6 space-y-3">
+      <div class="bg-white border border-slate-200 rounded-2xl p-4">
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Network</dt>
+        <dd class="text-lg font-semibold mt-1">{{ wifi_ssid }}</dd>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-4">
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Password</dt>
+        <dd class="mt-1 flex items-center justify-between gap-3">
+          <span class="text-lg font-mono select-all" id="wifi-password">{{ wifi_password }}</span>
+          <button
+            type="button"
+            id="copy-btn"
+            data-password="{{ wifi_password }}"
+            class="shrink-0 px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium active:bg-slate-700"
+          >
+            Copy
+          </button>
+        </dd>
+      </div>
+    </dl>
+
+    <script>
+      (function() {
+        var btn = document.getElementById('copy-btn');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+          var pwd = btn.getAttribute('data-password');
+          var done = function() {
+            var orig = 'Copy';
+            btn.textContent = 'Copied';
+            btn.classList.add('bg-emerald-600');
+            btn.classList.remove('bg-slate-900');
+            setTimeout(function() {
+              btn.textContent = orig;
+              btn.classList.add('bg-slate-900');
+              btn.classList.remove('bg-emerald-600');
+            }, 1500);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(pwd).then(done).catch(function() { fallback(); });
+          } else {
+            fallback();
+          }
+          function fallback() {
+            var el = document.getElementById('wifi-password');
+            var range = document.createRange();
+            range.selectNode(el);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            try { document.execCommand('copy'); done(); } catch (e) {}
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

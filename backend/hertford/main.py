@@ -293,11 +293,39 @@ async def tapo_toggle(request: Request) -> RedirectResponse:
     return RedirectResponse(f"/room/{TAPO_ROOM_ID}", status_code=303)
 
 
-@app.get("/info", response_class=HTMLResponse, response_model=None)
-async def info(request: Request):
+@app.get("/wifi", response_class=HTMLResponse, response_model=None)
+async def wifi(request: Request):
     if redir := _require_guest(request):
         return redir
-    return templates.TemplateResponse(request, "info.html", {"config": _cfg(request)})
+    cfg = _cfg(request)
+    qr_svg = _wifi_qr_svg(cfg) if cfg.wifi_ssid and cfg.wifi_password else None
+    return templates.TemplateResponse(
+        request,
+        "wifi.html",
+        {
+            "config": cfg,
+            "qr_svg": qr_svg,
+            "wifi_ssid": cfg.wifi_ssid,
+            "wifi_password": cfg.wifi_password,
+        },
+    )
+
+
+def _wifi_qr_svg(cfg: Config) -> str:
+    """Generate an inline SVG QR code that a phone camera can scan to join WiFi."""
+    import io
+
+    import segno
+
+    # Standard WiFi QR payload per https://en.wikipedia.org/wiki/QR_code#Joining_a_Wi-Fi_network
+    def esc(s: str) -> str:
+        return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace('"', '\\"').replace(":", "\\:")
+
+    payload = f"WIFI:T:{cfg.wifi_auth};S:{esc(cfg.wifi_ssid)};P:{esc(cfg.wifi_password)};;"
+    qr = segno.make(payload, error="h")
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=10, border=2, dark="#0f172a", xmldecl=False, svgns=False, omitsize=False)
+    return buf.getvalue().decode("utf-8")
 
 
 # ===================================================================== admin UI

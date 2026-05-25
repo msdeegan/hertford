@@ -20,3 +20,7 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# WiFi QR codes (creds; generated on the fly from env vars at /wifi instead)
+QR.svg
+qr.svg

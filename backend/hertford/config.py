@@ -34,6 +34,9 @@ class Config:
     tapo_email: str | None
     tapo_password: str | None
     guest_password: str | None
+    wifi_ssid: str | None
+    wifi_password: str | None
+    wifi_auth: str  # WPA / WEP / nopass
 
     def room(self, room_id: str) -> Room:
         for r in self.rooms:
@@ -88,6 +91,9 @@ def load_config(path: str | None = None) -> Config:
         tapo_email=os.environ.get("TAPO_EMAIL") or None,
         tapo_password=os.environ.get("TAPO_PASSWORD") or None,
         guest_password=os.environ.get("GUEST_PASSWORD") or None,
+        wifi_ssid=os.environ.get("WIFI_SSID") or None,
+        wifi_password=os.environ.get("WIFI_PASSWORD") or None,
+        wifi_auth=os.environ.get("WIFI_AUTH", "WPA"),
     )
 
 
