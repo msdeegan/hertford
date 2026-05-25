@@ -20,6 +20,9 @@ services:
     env_file: .env
     volumes:
       - ../config:/config:ro
+      # Persistent app state: Google TV pairing cert + host, future stuff.
+      # Created on first run; gitignored. Survives container rebuilds.
+      - ../data:/data
     expose:
       - "8000"
     networks:

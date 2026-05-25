@@ -24,3 +24,6 @@ Thumbs.db
 # WiFi QR codes (creds; generated on the fly from env vars at /wifi instead)
 QR.svg
 qr.svg
+
+# Per-deploy persistent state (Google TV cert, etc) mounted into the container
+/data/

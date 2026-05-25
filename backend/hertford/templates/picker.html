@@ -72,6 +72,22 @@
     {% endfor %}
   </div>
 
+  {% if show_gtv_remote %}
+    <div class="mt-6">
+      <a
+        href="/remote"
+        class="block w-full p-4 rounded-2xl border bg-white border-slate-200 active:bg-slate-100 transition-transform active:scale-[0.99]"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-lg font-semibold">Remote control</span>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+    </div>
+  {% endif %}
+
   {% if show_tapo %}
     <div class="mt-8 pt-6 border-t border-slate-200">
       {% if tapo_configured %}

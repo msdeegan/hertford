@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth
 from .config import Config, Room, load_config
+from .gtv import GoogleTV, GTVError, discover_lan
 from .matrix import MatrixClient, MatrixError
 from .tapo import TapoConfig, TapoError, TapoPlug
 
@@ -26,6 +27,13 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 # The Tapo plug ("TV System") is conceptually attached to this room's picker
 # page — that's where the on/off toggle appears for guests.
 TAPO_ROOM_ID = "red-room"
+
+# Source ID whose picker shows a "Remote" button (and which the remote
+# controls). Keep in sync with config/rooms.yaml.
+GTV_SOURCE_ID = "google-tv"
+
+# Where the GoogleTV cert + state live (mounted from host in compose).
+GTV_STATE_DIR = "/data/gtv"
 
 
 @asynccontextmanager
@@ -42,6 +50,13 @@ async def lifespan(app: FastAPI):
     else:
         app.state.tapo = None
         log.info("tapo not configured (TAPO_EMAIL/PASSWORD missing) — TV System button will be disabled")
+
+    app.state.gtv = GoogleTV(state_dir=os.environ.get("GTV_STATE_DIR", GTV_STATE_DIR))
+    log.info(
+        "google tv: %s (state at %s)",
+        f"paired with {app.state.gtv.host}" if app.state.gtv.paired else "not paired",
+        app.state.gtv.state_dir,
+    )
 
     # Home public networks, used to auto-auth visitors on the same WAN.
     # Each entry is an ipaddress network (IPv4 /32, IPv6 /64).
@@ -62,6 +77,7 @@ async def lifespan(app: FastAPI):
         if refresh_task is not None:
             refresh_task.cancel()
         await app.state.matrix.close()
+        await app.state.gtv.shutdown()
 
 
 async def _refresh_home_ip_loop(app: FastAPI) -> None:
@@ -392,6 +408,7 @@ async def room_picker(request: Request, room_id: str):
             "tapo_configured": _tapo(request) is not None,
             "tapo_on": tapo_on,
             "tapo_error": tapo_error,
+            "show_gtv_remote": current is not None and current.id == GTV_SOURCE_ID,
             "back_url": "/admin" if room.visibility == "admin" else "/",
         },
     )
@@ -476,6 +493,94 @@ def _wifi_qr_svg(cfg: Config) -> str:
 
 
 # ===================================================================== admin UI
+
+
+# ============================================================ google tv remote
+
+
+# Allowed key names — keep tight so /remote/key/<x> can't send arbitrary stuff.
+_GTV_ALLOWED_KEYS = {
+    "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT", "DPAD_CENTER",
+    "BACK", "HOME", "VOLUME_UP", "VOLUME_DOWN", "VOLUME_MUTE",
+}
+
+
+@app.get("/remote", response_class=HTMLResponse, response_model=None)
+async def remote_page(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    gtv: GoogleTV = request.app.state.gtv
+    return templates.TemplateResponse(
+        request,
+        "remote.html",
+        {
+            "config": _cfg(request),
+            "paired": gtv.paired,
+            "host": gtv.host,
+            "pairing_active": gtv._pairing is not None,
+        },
+    )
+
+
+@app.post("/remote/discover")
+async def remote_discover(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    try:
+        candidates = await discover_lan()
+    except Exception as e:
+        log.warning("gtv discover failed: %s", e)
+        candidates = []
+    return JSONResponse({"candidates": candidates})
+
+
+@app.post("/remote/pair/start")
+async def remote_pair_start(request: Request, host: str = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    gtv: GoogleTV = request.app.state.gtv
+    try:
+        await gtv.start_pairing(host)
+    except Exception as e:
+        log.error("pair start failed: %s", e)
+        return RedirectResponse(f"/remote?error=pair_start&msg={e}", status_code=303)
+    return RedirectResponse("/remote", status_code=303)
+
+
+@app.post("/remote/pair/complete")
+async def remote_pair_complete(request: Request, pin: str = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    gtv: GoogleTV = request.app.state.gtv
+    try:
+        await gtv.finish_pairing(pin)
+    except GTVError as e:
+        log.error("pair complete failed: %s", e)
+        return RedirectResponse(f"/remote?error=pair_complete&msg={e}", status_code=303)
+    return RedirectResponse("/remote", status_code=303)
+
+
+@app.post("/remote/forget")
+async def remote_forget(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    request.app.state.gtv.forget()
+    return RedirectResponse("/remote", status_code=303)
+
+
+@app.post("/remote/key/{key_name}")
+async def remote_key(request: Request, key_name: str):
+    if redir := _require_guest(request):
+        return redir
+    if key_name not in _GTV_ALLOWED_KEYS:
+        raise HTTPException(400, detail=f"key not allowed: {key_name}")
+    gtv: GoogleTV = request.app.state.gtv
+    try:
+        await gtv.send_key(key_name)
+    except GTVError as e:
+        log.warning("gtv key %s failed: %s", key_name, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
 
 
 @app.get("/admin", response_class=HTMLResponse)
