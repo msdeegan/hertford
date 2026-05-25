@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets as secrets_mod
@@ -42,11 +43,49 @@ async def lifespan(app: FastAPI):
         app.state.tapo = None
         log.info("tapo not configured (TAPO_EMAIL/PASSWORD missing) — TV System button will be disabled")
 
+    # Home public IP, used to auto-auth visitors on the same WAN.
+    app.state.home_ip = cfg.home_public_ip
+    refresh_task: asyncio.Task | None = None
+    if cfg.home_public_ip:
+        log.info("home public IP from HOME_PUBLIC_IP env: %s", cfg.home_public_ip)
+    else:
+        refresh_task = asyncio.create_task(_refresh_home_ip_loop(app))
+
     log.info("hertford starting; matrix=%s:%s", cfg.matrix_host, cfg.matrix_port)
     try:
         yield
     finally:
+        if refresh_task is not None:
+            refresh_task.cancel()
         await app.state.matrix.close()
+
+
+async def _refresh_home_ip_loop(app: FastAPI) -> None:
+    """Detect the home's public IP from the NAS's own outbound traffic.
+
+    The NAS lives on the home LAN, so its public-facing IP IS the home's
+    public IP. Re-checks every hour so dynamic-IP changes self-heal.
+    """
+    import aiohttp
+
+    while True:
+        try:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as session:
+                async with session.get("https://api.ipify.org") as resp:
+                    new_ip = (await resp.text()).strip()
+            old = getattr(app.state, "home_ip", None)
+            if new_ip and new_ip != old:
+                log.info(
+                    "home public IP %s: %s",
+                    "detected" if not old else f"changed from {old} to",
+                    new_ip,
+                )
+                app.state.home_ip = new_ip
+        except Exception as e:
+            log.warning("public IP detection failed: %s", e)
+        await asyncio.sleep(3600)
 
 
 app = FastAPI(title="Hertford", lifespan=lifespan)
@@ -128,6 +167,18 @@ def _room_visible(room: Room, request: Request) -> bool:
 @app.get("/healthz")
 async def healthz() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/whoami")
+async def whoami(request: Request) -> dict:
+    """Debug: shows what the app thinks the request looks like."""
+    return {
+        "cf_connecting_ip": request.headers.get("CF-Connecting-IP"),
+        "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+        "home_ip_cached": getattr(request.app.state, "home_ip", None),
+        "on_home_network": auth.is_on_home_network(request),
+        "guest_authed": auth.is_guest_authed(request),
+    }
 
 
 @app.get("/api/status")

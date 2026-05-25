@@ -37,6 +37,7 @@ class Config:
     wifi_ssid: str | None
     wifi_password: str | None
     wifi_auth: str  # WPA / WEP / nopass
+    home_public_ip: str | None  # overrides auto-detection
 
     def room(self, room_id: str) -> Room:
         for r in self.rooms:
@@ -94,6 +95,7 @@ def load_config(path: str | None = None) -> Config:
         wifi_ssid=os.environ.get("WIFI_SSID") or None,
         wifi_password=os.environ.get("WIFI_PASSWORD") or None,
         wifi_auth=os.environ.get("WIFI_AUTH", "WPA"),
+        home_public_ip=os.environ.get("HOME_PUBLIC_IP") or None,
     )
 
 

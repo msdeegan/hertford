@@ -25,7 +25,25 @@ CF_ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email"
 
 
 def is_guest_authed(request: Request) -> bool:
-    return bool(request.session.get("guest"))
+    if request.session.get("guest"):
+        return True
+    if is_on_home_network(request):
+        return True
+    return False
+
+
+def is_on_home_network(request: Request) -> bool:
+    """True if the request's CF-Connecting-IP matches the home's public IP.
+
+    Cloudflare puts the original visitor's IP in CF-Connecting-IP on tunneled
+    requests. The NAS's own public-facing IP is the home's public IP, so
+    visitors connecting from the same WAN show up with that IP.
+    """
+    home_ip = getattr(request.app.state, "home_ip", None)
+    if not home_ip:
+        return False
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    return bool(cf_ip) and cf_ip == home_ip
 
 
 def grant_guest(request: Request) -> None:
