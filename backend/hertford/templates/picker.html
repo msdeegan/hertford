@@ -72,14 +72,16 @@
     {% endfor %}
   </div>
 
-  {% if show_gtv_remote %}
+  {% if show_gtv_remote or show_atv_remote %}
     <div class="mt-6">
+      {% set remote_href = '/remote' if show_gtv_remote else '/atv' %}
+      {% set remote_label = 'Google TV remote' if show_gtv_remote else 'Apple TV remote' %}
       <a
-        href="/remote"
+        href="{{ remote_href }}"
         class="block w-full p-4 rounded-2xl border bg-white border-slate-200 active:bg-slate-100 transition-transform active:scale-[0.99]"
       >
         <div class="flex items-center justify-between">
-          <span class="text-lg font-semibold">Remote control</span>
+          <span class="text-lg font-semibold">{{ remote_label }}</span>
           <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
           </svg>

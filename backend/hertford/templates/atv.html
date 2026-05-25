@@ -1,0 +1,191 @@
+{% extends "_base.html" %}
+{% block title %}Apple TV · Hertford{% endblock %}
+{% block body %}
+  <header class="mb-6">
+    <a href="/" class="inline-flex items-center text-sm text-slate-500 active:text-slate-900 -ml-1">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back
+    </a>
+    <h1 class="text-2xl font-bold tracking-tight mt-2">Apple TV Remote</h1>
+    {% if paired %}
+      <p class="text-slate-500 text-sm mt-0.5">
+        Paired with <code class="font-mono">{{ name or host }}</code>
+      </p>
+    {% endif %}
+  </header>
+
+  {% if request.query_params.get('error') %}
+    <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
+      {{ request.query_params.get('msg', 'Something went wrong') }}
+    </div>
+  {% endif %}
+
+  {% if not paired and not pairing_active %}
+    {# Step 1: discover + pick host #}
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+      <p class="text-sm text-slate-700">
+        Tap <strong>Discover</strong> to scan the LAN for Apple TVs. Make sure
+        the TV is powered on and on the same WiFi as the NAS.
+      </p>
+      <button
+        type="button"
+        id="atv-discover-btn"
+        class="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold active:bg-slate-700"
+      >Discover</button>
+      <div id="atv-discover-status" class="text-sm text-slate-500"></div>
+      <form
+        id="atv-pair-form"
+        method="post"
+        action="/atv/pair/start"
+        class="space-y-3 hidden"
+      >
+        <label class="block">
+          <span class="text-xs uppercase tracking-wide text-slate-500">Apple TV</span>
+          <select name="host" id="atv-host-select" class="mt-1 w-full px-3 py-3 rounded-xl border border-slate-300 bg-white text-base"></select>
+        </label>
+        <button class="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold active:bg-slate-700">
+          Start pairing
+        </button>
+      </form>
+    </div>
+
+    <script>
+      (function() {
+        var btn = document.getElementById('atv-discover-btn');
+        var status = document.getElementById('atv-discover-status');
+        var form = document.getElementById('atv-pair-form');
+        var select = document.getElementById('atv-host-select');
+        btn.addEventListener('click', function() {
+          btn.disabled = true;
+          btn.textContent = 'Scanning…';
+          status.textContent = 'This takes ~10 seconds (TCP probe then mDNS).';
+          fetch('/atv/discover', { method: 'POST', credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              var cands = d.candidates || [];
+              if (cands.length === 0) {
+                status.textContent = 'No Apple TVs found. Make sure it\'s awake.';
+                btn.disabled = false; btn.textContent = 'Discover again';
+                return;
+              }
+              select.innerHTML = '';
+              cands.forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.host; o.textContent = c.name + ' (' + c.host + ')';
+                select.appendChild(o);
+              });
+              status.textContent = 'Found ' + cands.length + ' Apple TV(s).';
+              btn.classList.add('hidden');
+              form.classList.remove('hidden');
+            })
+            .catch(function(e) {
+              status.textContent = 'Scan failed: ' + e;
+              btn.disabled = false; btn.textContent = 'Try again';
+            });
+        });
+      })();
+    </script>
+
+  {% elif not paired and pairing_active %}
+    {# Step 2: enter PIN from TV #}
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+      <p class="text-sm text-slate-700">
+        A 4-digit PIN should be showing on your Apple TV. Enter it below.
+      </p>
+      <form method="post" action="/atv/pair/complete" class="space-y-3">
+        <input
+          type="text"
+          name="pin"
+          inputmode="numeric"
+          pattern="[0-9]+"
+          autofocus
+          required
+          maxlength="6"
+          placeholder="PIN"
+          class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-2xl font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+        >
+        <button class="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold active:bg-slate-700">
+          Pair
+        </button>
+      </form>
+      <form method="post" action="/atv/forget">
+        <button class="w-full py-2 text-sm text-slate-500 active:text-slate-900">Cancel pairing</button>
+      </form>
+    </div>
+
+  {% else %}
+    {# Paired: control pad #}
+    {% set btn_cls = "h-16 rounded-2xl bg-white border border-slate-200 active:bg-slate-200 active:scale-[0.97] transition flex items-center justify-center text-slate-700" %}
+
+    <div class="grid grid-cols-3 gap-3 mb-4 select-none" id="atv-dpad">
+      <div></div>
+      <button data-key="up" class="{{ btn_cls }}">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+      </button>
+      <div></div>
+
+      <button data-key="left" class="{{ btn_cls }}">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <button data-key="select" class="h-16 rounded-2xl bg-slate-900 text-white active:bg-slate-700 active:scale-[0.97] transition font-semibold">OK</button>
+      <button data-key="right" class="{{ btn_cls }}">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      <div></div>
+      <button data-key="down" class="{{ btn_cls }}">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div></div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-4" id="atv-navrow">
+      <button data-key="menu" class="{{ btn_cls }} text-base font-medium">Back</button>
+      <button data-key="play_pause" class="{{ btn_cls }}">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M9 10h.01M15 10h.01"/></svg>
+      </button>
+      <button data-key="home" class="{{ btn_cls }} text-base font-medium">TV</button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3" id="atv-volrow">
+      <button data-key="volume_down" class="{{ btn_cls }}">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9.354a4 4 0 010 5.292M5 9v6h4l5 5V4L9 9H5z"/></svg>
+      </button>
+      <button data-key="volume_up" class="{{ btn_cls }}">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5 9v6h4l5 5V4L9 9H5z"/></svg>
+      </button>
+    </div>
+
+    <div class="mt-8 pt-4 border-t border-slate-200">
+      <form method="post" action="/atv/forget">
+        <button class="w-full py-2 text-sm text-slate-400 active:text-slate-700">Unpair this remote</button>
+      </form>
+    </div>
+
+    <script>
+      (function() {
+        function ring(btn, ok) {
+          if (ok) return;
+          btn.classList.add('ring-2', 'ring-rose-400');
+          setTimeout(function() { btn.classList.remove('ring-2', 'ring-rose-400'); }, 800);
+        }
+        function bind(rootId) {
+          var root = document.getElementById(rootId);
+          if (!root) return;
+          root.querySelectorAll('button[data-key]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var key = btn.getAttribute('data-key');
+              fetch('/atv/key/' + key, { method: 'POST', credentials: 'same-origin' })
+                .then(function(r) { return r.json().catch(function() { return { ok: r.ok }; }); })
+                .then(function(d) { ring(btn, d && d.ok); })
+                .catch(function() { ring(btn, false); });
+            });
+          });
+        }
+        ['atv-dpad', 'atv-navrow', 'atv-volrow'].forEach(bind);
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

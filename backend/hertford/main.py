@@ -15,8 +15,11 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth
+from .atv import AppleTV, ATVError
+from .atv import discover_lan as discover_atv
 from .config import Config, Room, load_config
-from .gtv import GoogleTV, GTVError, discover_lan
+from .gtv import GoogleTV, GTVError
+from .gtv import discover_lan as discover_gtv
 from .matrix import MatrixClient, MatrixError
 from .tapo import TapoConfig, TapoError, TapoPlug
 
@@ -28,12 +31,14 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 # page — that's where the on/off toggle appears for guests.
 TAPO_ROOM_ID = "red-room"
 
-# Source ID whose picker shows a "Remote" button (and which the remote
+# Source IDs whose pickers show a "Remote" button (and which the remote
 # controls). Keep in sync with config/rooms.yaml.
 GTV_SOURCE_ID = "google-tv"
+ATV_SOURCE_ID = "apple-tv"
 
-# Where the GoogleTV cert + state live (mounted from host in compose).
+# Where each remote's cert/credentials live (mounted from host in compose).
 GTV_STATE_DIR = "/data/gtv"
+ATV_STATE_DIR = "/data/atv"
 
 
 @asynccontextmanager
@@ -58,6 +63,13 @@ async def lifespan(app: FastAPI):
         app.state.gtv.state_dir,
     )
 
+    app.state.atv = AppleTV(state_dir=os.environ.get("ATV_STATE_DIR", ATV_STATE_DIR))
+    log.info(
+        "apple tv: %s (state at %s)",
+        f"paired with {app.state.atv.host}" if app.state.atv.paired else "not paired",
+        app.state.atv.state_dir,
+    )
+
     # Home public networks, used to auto-auth visitors on the same WAN.
     # Each entry is an ipaddress network (IPv4 /32, IPv6 /64).
     app.state.home_networks = _parse_home_networks_env(cfg.home_public_ip)
@@ -78,6 +90,7 @@ async def lifespan(app: FastAPI):
             refresh_task.cancel()
         await app.state.matrix.close()
         await app.state.gtv.shutdown()
+        await app.state.atv.shutdown()
 
 
 async def _refresh_home_ip_loop(app: FastAPI) -> None:
@@ -409,6 +422,7 @@ async def room_picker(request: Request, room_id: str):
             "tapo_on": tapo_on,
             "tapo_error": tapo_error,
             "show_gtv_remote": current is not None and current.id == GTV_SOURCE_ID,
+            "show_atv_remote": current is not None and current.id == ATV_SOURCE_ID,
             "back_url": "/admin" if room.visibility == "admin" else "/",
         },
     )
@@ -579,6 +593,96 @@ async def remote_key(request: Request, key_name: str):
         await gtv.send_key(key_name)
     except GTVError as e:
         log.warning("gtv key %s failed: %s", key_name, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+# ============================================================ apple tv remote
+
+
+# pyatv RemoteControl has lots of methods; whitelist the ones we expose.
+# (Apple TV has no mute key — volume_up/down only.)
+_ATV_ALLOWED_KEYS = {
+    "up", "down", "left", "right", "select",
+    "menu", "home", "play_pause", "volume_up", "volume_down",
+}
+
+
+@app.get("/atv", response_class=HTMLResponse, response_model=None)
+async def atv_page(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    atv: AppleTV = request.app.state.atv
+    return templates.TemplateResponse(
+        request,
+        "atv.html",
+        {
+            "config": _cfg(request),
+            "paired": atv.paired,
+            "host": atv.host,
+            "name": atv.name,
+            "pairing_active": atv._pairing is not None,
+        },
+    )
+
+
+@app.post("/atv/discover")
+async def atv_discover(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    try:
+        candidates = await discover_atv()
+    except Exception as e:
+        log.warning("atv discover failed: %s", e)
+        candidates = []
+    return JSONResponse({"candidates": candidates})
+
+
+@app.post("/atv/pair/start")
+async def atv_pair_start(request: Request, host: str = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    atv: AppleTV = request.app.state.atv
+    try:
+        await atv.start_pairing(host)
+    except Exception as e:
+        log.error("atv pair start failed: %s", e)
+        return RedirectResponse(f"/atv?error=pair_start&msg={e}", status_code=303)
+    return RedirectResponse("/atv", status_code=303)
+
+
+@app.post("/atv/pair/complete")
+async def atv_pair_complete(request: Request, pin: str = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    atv: AppleTV = request.app.state.atv
+    try:
+        await atv.finish_pairing(pin)
+    except ATVError as e:
+        log.error("atv pair complete failed: %s", e)
+        return RedirectResponse(f"/atv?error=pair_complete&msg={e}", status_code=303)
+    return RedirectResponse("/atv", status_code=303)
+
+
+@app.post("/atv/forget")
+async def atv_forget(request: Request):
+    if redir := _require_guest(request):
+        return redir
+    request.app.state.atv.forget()
+    return RedirectResponse("/atv", status_code=303)
+
+
+@app.post("/atv/key/{key_name}")
+async def atv_key(request: Request, key_name: str):
+    if redir := _require_guest(request):
+        return redir
+    if key_name not in _ATV_ALLOWED_KEYS:
+        raise HTTPException(400, detail=f"key not allowed: {key_name}")
+    atv: AppleTV = request.app.state.atv
+    try:
+        await atv.send_key(key_name)
+    except ATVError as e:
+        log.warning("atv key %s failed: %s", key_name, e)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
     return JSONResponse({"ok": True})
 
