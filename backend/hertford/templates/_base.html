@@ -4,7 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hertford">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <title>{% block title %}Hertford Road{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -18,5 +23,89 @@
   <div class="max-w-md mx-auto px-4 py-6 pb-24">
     {% block body %}{% endblock %}
   </div>
+
+  {# Install-to-home-screen prompt — Android Chrome via beforeinstallprompt,
+     iOS Safari via static tooltip. Hidden when already installed (standalone). #}
+  <div
+    id="install-banner"
+    class="hidden fixed inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 bg-white/95 backdrop-blur border-t border-slate-200 shadow-lg"
+  >
+    <div class="max-w-md mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-slate-900 text-white grid place-items-center font-bold shrink-0">H</div>
+      <div class="flex-1 min-w-0 text-sm">
+        <div class="font-semibold leading-tight">Install Hertford</div>
+        <div id="install-hint" class="text-slate-500 leading-tight"></div>
+      </div>
+      <button id="install-btn" class="hidden shrink-0 px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium active:bg-slate-700">Install</button>
+      <button id="install-dismiss" class="shrink-0 px-2 py-2 text-slate-400 active:text-slate-700" aria-label="Dismiss">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var banner = document.getElementById('install-banner');
+      var btn = document.getElementById('install-btn');
+      var hint = document.getElementById('install-hint');
+      var dismiss = document.getElementById('install-dismiss');
+      if (!banner) return;
+
+      var DISMISS_KEY = 'hertford-install-dismissed';
+      var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      var dismissed = (function() {
+        try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) { return false; }
+      })();
+      if (standalone || dismissed) return;
+
+      var deferred = null;
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+      function show() {
+        banner.classList.remove('hidden');
+      }
+      function hide() {
+        banner.classList.add('hidden');
+      }
+      function rememberDismiss() {
+        try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
+      }
+
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferred = e;
+        hint.textContent = 'Add to home screen for a full-screen app.';
+        btn.classList.remove('hidden');
+        show();
+      });
+
+      btn.addEventListener('click', function() {
+        if (!deferred) return;
+        deferred.prompt();
+        deferred.userChoice.finally(function() {
+          deferred = null;
+          hide();
+        });
+      });
+
+      dismiss.addEventListener('click', function() {
+        rememberDismiss();
+        hide();
+      });
+
+      window.addEventListener('appinstalled', function() {
+        rememberDismiss();
+        hide();
+      });
+
+      // iOS has no install API — show a tooltip pointing at Share → Add to Home Screen.
+      if (isIOS) {
+        hint.innerHTML = 'Tap <span aria-hidden="true">⤴</span> Share, then <em class="not-italic font-medium">Add to Home Screen</em>.';
+        show();
+      }
+    })();
+  </script>
 </body>
 </html>

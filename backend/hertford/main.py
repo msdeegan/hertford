@@ -213,6 +213,46 @@ async def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/manifest.webmanifest")
+async def manifest() -> JSONResponse:
+    return JSONResponse(
+        {
+            "name": "Hertford Road",
+            "short_name": "Hertford",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#f8fafc",
+            "theme_color": "#0f172a",
+            "icons": [
+                {
+                    "src": "/icon.svg",
+                    "type": "image/svg+xml",
+                    "sizes": "any",
+                    "purpose": "any maskable",
+                },
+            ],
+        },
+        media_type="application/manifest+json",
+    )
+
+
+@app.get("/icon.svg")
+async def icon() -> "Response":
+    from fastapi.responses import Response
+
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
+        '<rect width="512" height="512" fill="#0f172a" rx="112"/>'
+        '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" '
+        'font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" '
+        'font-size="320" font-weight="900" fill="white">H</text>'
+        "</svg>"
+    )
+    return Response(content=svg, media_type="image/svg+xml")
+
+
 @app.get("/whoami")
 async def whoami(request: Request) -> dict:
     """Debug: shows what the app thinks the request looks like."""
