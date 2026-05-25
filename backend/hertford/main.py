@@ -216,10 +216,11 @@ async def healthz() -> dict[str, bool]:
 @app.get("/whoami")
 async def whoami(request: Request) -> dict:
     """Debug: shows what the app thinks the request looks like."""
+    nets = getattr(request.app.state, "home_networks", []) or []
     return {
         "cf_connecting_ip": request.headers.get("CF-Connecting-IP"),
         "x_forwarded_for": request.headers.get("X-Forwarded-For"),
-        "home_ip_cached": getattr(request.app.state, "home_ip", None),
+        "home_networks_cached": [str(n) for n in nets],
         "on_home_network": auth.is_on_home_network(request),
         "guest_authed": auth.is_guest_authed(request),
     }
