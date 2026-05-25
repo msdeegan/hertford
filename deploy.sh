@@ -31,10 +31,10 @@ fi
 
 echo "→ rebuilding and restarting"
 cd infra
-sudo docker compose up -d --build
+docker compose up -d --build
 
 echo "→ status"
-sudo docker compose ps
+docker compose ps
 
 echo "→ recent hertford logs"
-sudo docker compose logs --tail=10 hertford
+docker compose logs --tail=10 hertford
