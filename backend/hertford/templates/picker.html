@@ -19,9 +19,15 @@
   </header>
 
   {% if matrix_error %}
-    <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
-      Matrix unreachable: {{ matrix_error }}
-    </div>
+    {% if show_tapo and tapo_on is sameas false %}
+      <div class="mb-4 p-3 rounded-xl bg-slate-100 text-slate-600 text-sm">
+        Matrix is asleep because TV System is off — flip it on below to wake everything up.
+      </div>
+    {% else %}
+      <div class="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-sm">
+        Matrix unreachable: {{ matrix_error }}
+      </div>
+    {% endif %}
   {% endif %}
 
   <div class="space-y-3">

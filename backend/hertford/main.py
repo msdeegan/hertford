@@ -424,6 +424,9 @@ async def tapo_toggle(request: Request) -> RedirectResponse:
             await plug.off()
         else:
             await plug.on()
+        # Tapo's get_device_info() lags the relay command by a few hundred ms,
+        # so without this the next page render still reads the old state.
+        await asyncio.sleep(0.6)
     except TapoError as e:
         log.error("tapo toggle failed: %s", e)
     return RedirectResponse(f"/room/{TAPO_ROOM_ID}", status_code=303)
