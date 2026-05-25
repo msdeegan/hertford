@@ -21,6 +21,10 @@ set -euo pipefail
 BRANCH="${HERTFORD_BRANCH:-dev}"
 REPO_URL="${HERTFORD_REPO_URL:-https://github.com/msdeegan/hertford}"
 TARBALL_URL="${REPO_URL}/archive/refs/heads/${BRANCH}.tar.gz"
+# Full path to docker — the NOPASSWD sudoers entry targets this exact path,
+# and sudo's own PATH may otherwise resolve `docker` to a different binary
+# (Container Manager ships its own copy alongside /usr/local/bin/docker).
+DOCKER="${HERTFORD_DOCKER:-/usr/local/bin/docker}"
 
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -36,10 +40,10 @@ fi
 
 echo "→ rebuilding and restarting"
 cd infra
-sudo docker compose up -d --build
+sudo "$DOCKER" compose up -d --build
 
 echo "→ status"
-sudo docker compose ps
+sudo "$DOCKER" compose ps
 
 echo "→ recent hertford logs"
-sudo docker compose logs --tail=10 hertford
+sudo "$DOCKER" compose logs --tail=10 hertford
