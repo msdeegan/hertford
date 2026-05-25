@@ -38,6 +38,10 @@ if [ ! -f infra/.env ]; then
     exit 1
 fi
 
+# Persistent app state (Google TV cert, Apple TV credentials, …). Docker won't
+# auto-create bind-mount host paths and Container Manager errors out if missing.
+mkdir -p data
+
 echo "→ rebuilding and restarting"
 cd infra
 sudo "$DOCKER" compose up -d --build
