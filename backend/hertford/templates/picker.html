@@ -371,10 +371,110 @@
     </div>
   {% endif %}
 
+  {% if show_lounge_lights %}
+    <div class="mt-8 pt-6 border-t border-slate-200">
+      <h2 class="text-sm font-medium uppercase tracking-wide text-slate-500 mb-3">Lounge Lights</h2>
+
+      {% if not lounge_tapo_configured and not lounge_tuya_configured %}
+        <div class="p-4 rounded-2xl bg-slate-100 border border-slate-200 text-sm text-slate-500">
+          No lounge lights configured yet. Set <code class="font-mono">TAPO_LOUNGE_HOST</code> and
+          <code class="font-mono">TUYA_LOUNGE_*</code> in <code class="font-mono">.env</code>.
+        </div>
+      {% else %}
+        <div class="ll-card p-4 rounded-2xl bg-white border border-slate-200 space-y-4 select-none">
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              type="button" data-on="true"
+              class="ll-on p-3 rounded-xl border bg-emerald-50 border-emerald-200 active:bg-emerald-100 font-semibold"
+            >Turn on</button>
+            <button
+              type="button" data-on="false"
+              class="ll-off p-3 rounded-xl border bg-slate-100 border-slate-200 active:bg-slate-200 font-semibold"
+            >Turn off</button>
+          </div>
+          <p class="text-xs text-slate-500">
+            Both the lamp (via Tapo plug) and the WiFi bulb toggle together.
+          </p>
+
+          {% if lounge_tuya_configured %}
+            <div class="pt-3 border-t border-slate-100 space-y-3">
+              <p class="text-xs text-slate-500">Bulb-only — the lamp on the plug has no brightness/colour control.</p>
+              <label class="block">
+                <div class="flex items-baseline justify-between mb-1">
+                  <span class="text-sm text-slate-700">Brightness</span>
+                  <span class="text-xs text-slate-500 font-mono" id="ll-b-val">
+                    {{ lounge_tuya_state.brightness if lounge_tuya_state and lounge_tuya_state.brightness else 50 }}%
+                  </span>
+                </div>
+                <input
+                  type="range" id="ll-brightness" min="1" max="100" step="1"
+                  value="{{ lounge_tuya_state.brightness if lounge_tuya_state and lounge_tuya_state.brightness else 50 }}"
+                  class="w-full"
+                >
+              </label>
+              <label class="block">
+                <div class="flex items-baseline justify-between mb-1">
+                  <span class="text-sm text-slate-700">Warmth</span>
+                  <span class="text-xs text-slate-500 font-mono" id="ll-k-val">
+                    {{ lounge_tuya_state.kelvin if lounge_tuya_state and lounge_tuya_state.kelvin else 4000 }} K
+                  </span>
+                </div>
+                <input
+                  type="range" id="ll-kelvin" min="2700" max="6500" step="100"
+                  value="{{ lounge_tuya_state.kelvin if lounge_tuya_state and lounge_tuya_state.kelvin else 4000 }}"
+                  class="w-full"
+                >
+                <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-400 mt-1">
+                  <span>Warm</span><span>Cool</span>
+                </div>
+              </label>
+            </div>
+          {% endif %}
+
+          {% if lounge_tuya_error %}
+            <div class="text-xs text-rose-600">Bulb error: {{ lounge_tuya_error }}</div>
+          {% endif %}
+        </div>
+
+        <script>
+          (function() {
+            document.querySelectorAll('.ll-on, .ll-off').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                var fd = new FormData(); fd.append('on', btn.dataset.on);
+                fetch('/lounge-lights/toggle', { method:'POST', credentials:'same-origin', body: fd })
+                  .then(function(r) { return r.json(); });
+              });
+            });
+
+            var br = document.getElementById('ll-brightness');
+            var brVal = document.getElementById('ll-b-val');
+            if (br) {
+              br.addEventListener('input', function() { brVal.textContent = br.value + '%'; });
+              br.addEventListener('change', function() {
+                var fd = new FormData(); fd.append('value', br.value);
+                fetch('/tuya/{{ lounge_tuya_id }}/brightness', { method:'POST', credentials:'same-origin', body: fd });
+              });
+            }
+            var k = document.getElementById('ll-kelvin');
+            var kVal = document.getElementById('ll-k-val');
+            if (k) {
+              k.addEventListener('input', function() { kVal.textContent = k.value + ' K'; });
+              k.addEventListener('change', function() {
+                var fd = new FormData(); fd.append('value', k.value);
+                fetch('/tuya/{{ lounge_tuya_id }}/kelvin', { method:'POST', credentials:'same-origin', body: fd });
+              });
+            }
+          })();
+        </script>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if show_tapo %}
     <div class="mt-8 pt-6 border-t border-slate-200">
       {% if tapo_configured %}
         <form method="post" action="/tapo/tv-system/toggle">
+          <input type="hidden" name="_referer" value="/room/{{ room.id }}">
           <button
             type="submit"
             class="w-full p-4 rounded-2xl border transition-transform active:scale-[0.99]

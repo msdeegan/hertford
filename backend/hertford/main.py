@@ -25,6 +25,7 @@ from .keylight import discover_lan as discover_keylight
 from .matrix import MatrixClient, MatrixError
 from .neewer import NeewerBridge, NeewerError
 from .tapo import TapoConfig, TapoError, TapoPlug
+from .tuya import TuyaBulb, TuyaBulbConfig, TuyaError
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,23 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 # The Tapo plug ("TV System") is conceptually attached to this room's picker
 # page — that's where the on/off toggle appears for guests.
 TAPO_ROOM_ID = "red-room"
+
+# Named Tapo plugs. Host comes from <host_env>; falls back to default_host so
+# Matt's existing TAPO_HOST env keeps working.
+TAPO_PLUGS = [
+    {"id": "tv-system", "label": "TV System", "host_env": "TAPO_HOST"},
+    {"id": "lounge", "label": "Lounge lamp", "host_env": "TAPO_LOUNGE_HOST"},
+]
+
+# Tuya/SmartLife bulbs (controlled via tinytuya local-LAN protocol).
+TUYA_BULBS = [
+    {"id": "lounge", "label": "Lounge bulb", "env_prefix": "TUYA_LOUNGE"},
+]
+
+# Which room shows the grouped Lounge-lights control (Tapo plug + Tuya bulb).
+LOUNGE_ROOM_ID = "lounge"
+LOUNGE_TAPO_PLUG_ID = "lounge"
+LOUNGE_TUYA_BULB_ID = "lounge"
 
 # Source IDs whose pickers show a "Remote" button (and which the remote
 # controls). Keep in sync with config/rooms.yaml.
@@ -61,14 +79,31 @@ async def lifespan(app: FastAPI):
     app.state.config = cfg
     app.state.matrix = MatrixClient(cfg.matrix_host, cfg.matrix_port)
 
-    if cfg.tapo_email and cfg.tapo_password and cfg.tapo_host:
-        app.state.tapo = TapoPlug(
-            TapoConfig(host=cfg.tapo_host, email=cfg.tapo_email, password=cfg.tapo_password)
-        )
-        log.info("tapo plug configured at %s", cfg.tapo_host)
+    # Multi-Tapo. Each plug shares the same TP-Link account creds (cfg.tapo_*),
+    # but each has its own host.
+    app.state.tapo_plugs = {}
+    if cfg.tapo_email and cfg.tapo_password:
+        for plug in TAPO_PLUGS:
+            host = os.environ.get(plug["host_env"])
+            if plug["id"] == "tv-system" and not host:
+                host = cfg.tapo_host  # legacy TAPO_HOST default
+            if host:
+                app.state.tapo_plugs[plug["id"]] = TapoPlug(
+                    TapoConfig(host=host, email=cfg.tapo_email, password=cfg.tapo_password)
+                )
+                log.info("tapo plug %s at %s", plug["id"], host)
     else:
-        app.state.tapo = None
-        log.info("tapo not configured (TAPO_EMAIL/PASSWORD missing) — TV System button will be disabled")
+        log.info("tapo not configured (TAPO_EMAIL/PASSWORD missing) — plug buttons disabled")
+    # Backwards-compat: keep app.state.tapo pointing at the TV-System plug.
+    app.state.tapo = app.state.tapo_plugs.get("tv-system")
+
+    # Tuya/SmartLife bulbs.
+    app.state.tuya_bulbs = {}
+    for bulb in TUYA_BULBS:
+        bcfg = TuyaBulbConfig.from_env(bulb["id"], bulb["label"], bulb["env_prefix"])
+        if bcfg:
+            app.state.tuya_bulbs[bulb["id"]] = TuyaBulb(bcfg)
+            log.info("tuya bulb %s at %s", bulb["id"], bcfg.ip)
 
     app.state.gtv = GoogleTV(state_dir=os.environ.get("GTV_STATE_DIR", GTV_STATE_DIR))
     log.info(
@@ -431,6 +466,19 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
     if room.id == TAPO_ROOM_ID:
         tapo_on, tapo_error = await _tapo_state(request)
 
+    # Lounge: combined plug + bulb panel.
+    show_lounge_lights = room.id == LOUNGE_ROOM_ID
+    lounge_tapo_configured = LOUNGE_TAPO_PLUG_ID in request.app.state.tapo_plugs
+    lounge_tuya_configured = LOUNGE_TUYA_BULB_ID in request.app.state.tuya_bulbs
+    lounge_tuya_state = None
+    lounge_tuya_error = None
+    if show_lounge_lights and lounge_tuya_configured:
+        try:
+            lounge_tuya_state = await request.app.state.tuya_bulbs[LOUNGE_TUYA_BULB_ID].status()
+        except TuyaError as e:
+            lounge_tuya_error = str(e)
+            log.warning("tuya status failed: %s", e)
+
     # Key light state only fetched for the Office picker, admin view only.
     keylight_state = None
     keylight_error = None
@@ -473,6 +521,14 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
             "neewer_configured": neewer.configured,
             "neewer_healthy": neewer_healthy,
             "neewer_lights": NEEWER_LIGHTS,
+            "show_lounge_lights": show_lounge_lights,
+            "lounge_tapo_configured": lounge_tapo_configured,
+            "lounge_tuya_configured": lounge_tuya_configured,
+            "lounge_tuya_id": LOUNGE_TUYA_BULB_ID,
+            "lounge_tapo_id": LOUNGE_TAPO_PLUG_ID,
+            "lounge_tuya_state": lounge_tuya_state,
+            "lounge_tuya_error": lounge_tuya_error,
+            "tapo_room_plug_id": TAPO_ROOM_ID and "tv-system",
             "is_admin_view": is_admin_view,
             "back_url": "/admin" if is_admin_view else "/",
         },
@@ -522,24 +578,99 @@ async def room_switch(
     return await _do_switch(request, room, source_id, redirect_to=f"/room/{room.id}")
 
 
-@app.post("/tapo/tv-system/toggle")
-async def tapo_toggle(request: Request) -> RedirectResponse:
+@app.post("/tapo/{plug_id}/toggle")
+async def tapo_toggle(request: Request, plug_id: str) -> RedirectResponse:
     if redir := _require_guest(request):
         return redir
-    plug = _tapo(request)
+    plug = request.app.state.tapo_plugs.get(plug_id)
     if plug is None:
-        raise HTTPException(503, detail="tapo not configured")
+        raise HTTPException(404, detail=f"no plug {plug_id!r}")
+    redirect = request.headers.get("Referer") or f"/room/{TAPO_ROOM_ID}"
     try:
         if await plug.is_on():
             await plug.off()
         else:
             await plug.on()
-        # Tapo's get_device_info() lags the relay command by a few hundred ms,
-        # so without this the next page render still reads the old state.
+        # Tapo's get_device_info() lags the relay command by a few hundred ms.
         await asyncio.sleep(0.6)
     except TapoError as e:
-        log.error("tapo toggle failed: %s", e)
-    return RedirectResponse(f"/room/{TAPO_ROOM_ID}", status_code=303)
+        log.error("tapo toggle %s failed: %s", plug_id, e)
+    return RedirectResponse(redirect, status_code=303)
+
+
+# ============================================================ tuya (smartlife)
+
+
+@app.post("/tuya/{bulb_id}/power")
+async def tuya_power(request: Request, bulb_id: str, on: bool = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    bulb: TuyaBulb | None = request.app.state.tuya_bulbs.get(bulb_id)
+    if bulb is None:
+        raise HTTPException(404, detail=f"no tuya bulb {bulb_id!r}")
+    try:
+        await bulb.power(on)
+    except TuyaError as e:
+        log.warning("tuya %s power failed: %s", bulb_id, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/tuya/{bulb_id}/brightness")
+async def tuya_brightness(request: Request, bulb_id: str, value: int = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    bulb: TuyaBulb | None = request.app.state.tuya_bulbs.get(bulb_id)
+    if bulb is None:
+        raise HTTPException(404)
+    try:
+        await bulb.set_brightness(value)
+    except TuyaError as e:
+        log.warning("tuya %s brightness failed: %s", bulb_id, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/tuya/{bulb_id}/kelvin")
+async def tuya_kelvin(request: Request, bulb_id: str, value: int = Form(...)):
+    if redir := _require_guest(request):
+        return redir
+    bulb: TuyaBulb | None = request.app.state.tuya_bulbs.get(bulb_id)
+    if bulb is None:
+        raise HTTPException(404)
+    try:
+        await bulb.set_kelvin(value)
+    except TuyaError as e:
+        log.warning("tuya %s kelvin failed: %s", bulb_id, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+# ============================================================ lounge group
+
+
+@app.post("/lounge-lights/toggle")
+async def lounge_lights_toggle(request: Request, on: bool = Form(...)):
+    """Set both Lounge lights to the same state (plug + Tuya bulb)."""
+    if redir := _require_guest(request):
+        return redir
+    errors = []
+    plug = request.app.state.tapo_plugs.get(LOUNGE_TAPO_PLUG_ID)
+    if plug:
+        try:
+            if on:
+                await plug.on()
+            else:
+                await plug.off()
+        except Exception as e:
+            errors.append(f"plug: {e}")
+    bulb = request.app.state.tuya_bulbs.get(LOUNGE_TUYA_BULB_ID)
+    if bulb:
+        try:
+            await bulb.power(on)
+        except Exception as e:
+            errors.append(f"bulb: {e}")
+    return JSONResponse({"ok": not errors, "errors": errors})
 
 
 @app.get("/wifi", response_class=HTMLResponse, response_model=None)

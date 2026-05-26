@@ -19,6 +19,7 @@ api = [
     "segno>=1.6",
     "androidtvremote2>=0.3",
     "pyatv>=0.16",
+    "tinytuya>=1.16",
 ]
 dev = [
     "pytest>=8.0",
