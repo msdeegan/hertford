@@ -112,6 +112,10 @@ class NeewerLight:
         self.name = name
         self._client: BleakClient | None = None
         self._lock = asyncio.Lock()
+        # Track last known white-light settings so /power can restore them
+        # on "on" without the caller having to re-send brightness/cct.
+        self.last_brightness = 50
+        self.last_cct = 44
 
     async def _ensure(self) -> BleakClient:
         if self._client is not None and self._client.is_connected:
@@ -151,9 +155,19 @@ class NeewerLight:
                 await client.write_gatt_char(WRITE_CHAR_UUID, payload, response=False)
 
     async def power(self, on: bool) -> None:
-        await self.send(cmd_power(on))
+        # NB: do NOT use cmd_power() — the dedicated power-off command makes
+        # the RGB190 deep-sleep after ~60s, after which it's unreachable
+        # over BLE until physically wake. We get the same visible effect by
+        # setting brightness to 0 while keeping the radio active.
+        if on:
+            await self.cct(self.last_brightness or 50, self.last_cct or 44)
+        else:
+            await self.cct(0, self.last_cct or 44)
 
     async def cct(self, brightness: int, cct: int) -> None:
+        if brightness > 0:
+            self.last_brightness = brightness
+        self.last_cct = cct
         await self.send(cmd_cct(brightness, cct))
 
     async def color(self, hue: int, saturation: int, brightness: int) -> None:
