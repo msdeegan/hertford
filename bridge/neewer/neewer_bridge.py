@@ -43,6 +43,10 @@ from typing import Any
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
+
+
+class BleakNotFound(Exception):
+    """Raised when a stored address can't be located via a fresh BLE scan."""
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import JSONResponse
 
@@ -110,12 +114,24 @@ class NeewerLight:
         self._lock = asyncio.Lock()
 
     async def _ensure(self) -> BleakClient:
-        if self._client is None or not self._client.is_connected:
-            log.info("connecting to %s (%s)…", self.address, self.name)
-            client = BleakClient(self.address, timeout=10)
-            await client.connect()
-            self._client = client
-        return self._client
+        if self._client is not None and self._client.is_connected:
+            return self._client
+        # macOS Core Bluetooth requires the peripheral to have been seen in a
+        # recent scan; opening BleakClient straight from a stored UUID often
+        # fails with "Device with address ... was not found". Do a short
+        # rediscovery scan first to refresh the peripheral reference.
+        log.info("rediscovering %s (%s)…", self.address, self.name)
+        device = await BleakScanner.find_device_by_address(self.address, timeout=8.0)
+        if device is None:
+            raise BleakNotFound(
+                f"could not find {self.address} via BLE scan — "
+                "is the light on and in range?"
+            )
+        log.info("connecting to %s (%s)…", self.address, self.name)
+        client = BleakClient(device, timeout=10)
+        await client.connect()
+        self._client = client
+        return client
 
     async def send(self, payload: bytes) -> None:
         async with self._lock:
