@@ -213,9 +213,11 @@ async def discover():
     """BLE scan for Neewer devices.
 
     Returns devices whose advertised name starts with NEEWER (case-insensitive).
+    Scans for 10s — some Neewer panels advertise at a low duty cycle and
+    can be missed by shorter scans.
     """
-    log.info("scanning for ~5s…")
-    devices: list[BLEDevice] = await BleakScanner.discover(timeout=5.0)
+    log.info("scanning for ~10s…")
+    devices: list[BLEDevice] = await BleakScanner.discover(timeout=10.0)
     found: list[dict[str, Any]] = []
     for d in devices:
         name = d.name or ""
