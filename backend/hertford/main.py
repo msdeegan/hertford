@@ -359,6 +359,7 @@ async def home(request: Request):
 
     cfg = _cfg(request)
     routing, matrix_error = await _routing(request)
+    is_admin = auth.is_admin(request)
 
     tiles = []
     for room in cfg.rooms:
@@ -375,24 +376,17 @@ async def home(request: Request):
             "config": cfg,
             "tiles": tiles,
             "matrix_error": matrix_error,
-            "is_admin_view": False,
+            # When admin's signed in we mark the view as admin so tile links
+            # use /admin/room/{id} (which works for any room, including the
+            # admin-visibility Office one).
+            "is_admin_view": is_admin,
         },
     )
 
 
-@app.get("/room/{room_id}", response_class=HTMLResponse, response_model=None)
-async def room_picker(request: Request, room_id: str):
-    if redir := _require_guest(request):
-        return redir
-
+async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
+    """Shared picker render — used by both guest and admin routes."""
     cfg = _cfg(request)
-    try:
-        room = cfg.room(room_id)
-    except KeyError:
-        raise HTTPException(404)
-    if not _room_visible(room, request):
-        raise HTTPException(404)  # don't leak existence of admin rooms
-
     routing, matrix_error = await _routing(request)
     current = cfg.source_by_input(routing.get(room.output)) if routing else None
 
@@ -423,9 +417,37 @@ async def room_picker(request: Request, room_id: str):
             "tapo_error": tapo_error,
             "show_gtv_remote": current is not None and current.id == GTV_SOURCE_ID,
             "show_atv_remote": current is not None and current.id == ATV_SOURCE_ID,
-            "back_url": "/admin" if room.visibility == "admin" else "/",
+            "is_admin_view": is_admin_view,
+            "back_url": "/admin" if is_admin_view else "/",
         },
     )
+
+
+async def _do_switch(request: Request, room: Room, source_id: str, *, redirect_to: str):
+    cfg = _cfg(request)
+    try:
+        source = cfg.source(source_id)
+    except KeyError:
+        raise HTTPException(404)
+    try:
+        await _matrix(request).route(room.output, source.input)
+    except (MatrixError, ValueError) as e:
+        log.error("route %s→%s failed: %s", room.id, source.id, e)
+    return RedirectResponse(redirect_to, status_code=303)
+
+
+@app.get("/room/{room_id}", response_class=HTMLResponse, response_model=None)
+async def room_picker(request: Request, room_id: str):
+    if redir := _require_guest(request):
+        return redir
+    cfg = _cfg(request)
+    try:
+        room = cfg.room(room_id)
+    except KeyError:
+        raise HTTPException(404)
+    if not _room_visible(room, request):
+        raise HTTPException(404)  # don't leak existence of admin rooms
+    return await _render_picker(request, room, is_admin_view=False)
 
 
 @app.post("/room/{room_id}/source/{source_id}")
@@ -437,18 +459,11 @@ async def room_switch(
     cfg = _cfg(request)
     try:
         room = cfg.room(room_id)
-        source = cfg.source(source_id)
     except KeyError:
         raise HTTPException(404)
     if not _room_visible(room, request):
         raise HTTPException(403)
-
-    try:
-        await _matrix(request).route(room.output, source.input)
-    except (MatrixError, ValueError) as e:
-        log.error("route %s→%s failed: %s", room.id, source.id, e)
-        # fall through to redirect; the picker will show the (unchanged) state
-    return RedirectResponse(f"/room/{room.id}", status_code=303)
+    return await _do_switch(request, room, source_id, redirect_to=f"/room/{room.id}")
 
 
 @app.post("/tapo/tv-system/toggle")
@@ -711,3 +726,29 @@ async def admin_home(request: Request) -> HTMLResponse:
             "cf_user": auth.cf_access_user(request) or "(no header)",
         },
     )
+
+
+@app.get("/admin/room/{room_id}", response_class=HTMLResponse, response_model=None)
+async def admin_room_picker(request: Request, room_id: str):
+    """Admin picker — same render as /room/{id} but under CF Access; admins can
+    see any room regardless of visibility."""
+    _require_admin(request)
+    cfg = _cfg(request)
+    try:
+        room = cfg.room(room_id)
+    except KeyError:
+        raise HTTPException(404)
+    return await _render_picker(request, room, is_admin_view=True)
+
+
+@app.post("/admin/room/{room_id}/source/{source_id}")
+async def admin_room_switch(
+    request: Request, room_id: str, source_id: str
+) -> RedirectResponse:
+    _require_admin(request)
+    cfg = _cfg(request)
+    try:
+        room = cfg.room(room_id)
+    except KeyError:
+        raise HTTPException(404)
+    return await _do_switch(request, room, source_id, redirect_to=f"/admin/room/{room.id}")

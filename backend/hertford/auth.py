@@ -33,6 +33,21 @@ def is_guest_authed(request: Request) -> bool:
     return False
 
 
+def grant_admin(request: Request) -> None:
+    """Mark the session as admin-authenticated.
+
+    Called when a request arrives with the Cf-Access-Authenticated-User-Email
+    header (meaning CF Access has just verified them). Persists in the signed
+    session cookie so subsequent visits to non-/admin paths (e.g. the home
+    page) also see them as admin.
+    """
+    request.session["admin"] = True
+
+
+def revoke_admin(request: Request) -> None:
+    request.session.pop("admin", None)
+
+
 def is_on_home_network(request: Request) -> bool:
     """True if CF-Connecting-IP falls inside one of the home's public networks.
 
@@ -59,7 +74,11 @@ def grant_guest(request: Request) -> None:
 
 
 def revoke_guest(request: Request) -> None:
+    # "Sign out" clears both guest and admin session flags. The CF Access
+    # cookie is separate and the user would still re-establish admin if they
+    # revisit /admin while their CF cookie is valid.
     request.session.pop("guest", None)
+    request.session.pop("admin", None)
 
 
 def check_guest_password(submitted: str, expected: str | None) -> bool:
@@ -74,12 +93,17 @@ def cf_access_user(request: Request) -> str | None:
 
 
 def is_admin(request: Request) -> bool:
-    """Admin = the request came through Cloudflare Access.
+    """Admin = the request came through Cloudflare Access at least once.
 
-    Since cloudflared is the only public ingress and CF Access only fires on
-    /admin/* paths, presence of the header is a sufficient signal.
+    CF Access only injects its `Cf-Access-Authenticated-User-Email` header on
+    paths it protects (`/admin/*`). To keep admin status visible on
+    non-protected paths like `/`, we set a session flag the first time we see
+    the header, and trust it thereafter. The flag is cleared by /logout.
     """
-    return cf_access_user(request) is not None
+    if cf_access_user(request) is not None:
+        request.session["admin"] = True
+        return True
+    return bool(request.session.get("admin"))
 
 
 def login_redirect(next_path: str = "/") -> RedirectResponse:

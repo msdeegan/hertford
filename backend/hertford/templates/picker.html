@@ -37,6 +37,7 @@
     {% endif %}
   {% endif %}
 
+  {% set room_url_prefix = '/admin/room/' if is_admin_view else '/room/' %}
   <div class="space-y-3">
     {% for source in config.sources %}
       {% set is_current = current and current.id == source.id %}
@@ -44,7 +45,7 @@
       {# has_signal is True/False if we know, None if we couldn't query #}
       {% set no_signal = has_signal is sameas false %}
       {% set is_disabled = is_current or matrix_error or no_signal %}
-      <form method="post" action="/room/{{ room.id }}/source/{{ source.id }}">
+      <form method="post" action="{{ room_url_prefix }}{{ room.id }}/source/{{ source.id }}">
         <button
           type="submit"
           {% if is_disabled %}disabled{% endif %}

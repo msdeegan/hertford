@@ -5,14 +5,12 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Hertford Road</h1>
       {% if is_admin_view %}
-        <p class="text-xs text-slate-500 mt-0.5">admin · {{ cf_user }}</p>
+        <p class="text-xs text-slate-500 mt-0.5">admin{% if cf_user %} · {{ cf_user }}{% endif %}</p>
       {% endif %}
     </div>
-    {% if not is_admin_view %}
-      <form method="post" action="/logout">
-        <button class="text-sm text-slate-500 active:text-slate-900">Sign out</button>
-      </form>
-    {% endif %}
+    <form method="post" action="/logout">
+      <button class="text-sm text-slate-500 active:text-slate-900">Sign out</button>
+    </form>
   </header>
 
   {% if matrix_error %}
@@ -21,10 +19,11 @@
     </div>
   {% endif %}
 
+  {% set room_prefix = '/admin/room/' if is_admin_view else '/room/' %}
   <div class="space-y-3">
     {% for tile in tiles %}
       <a
-        href="/room/{{ tile.room.id }}"
+        href="{{ room_prefix }}{{ tile.room.id }}"
         class="block bg-white rounded-2xl shadow-sm border border-slate-200 p-4 active:bg-slate-100 active:scale-[0.99] transition-transform"
       >
         <div class="flex items-center justify-between">
