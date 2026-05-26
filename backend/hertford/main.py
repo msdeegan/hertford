@@ -23,6 +23,7 @@ from .gtv import discover_lan as discover_gtv
 from .keylight import KeyLight, KeyLightError
 from .keylight import discover_lan as discover_keylight
 from .matrix import MatrixClient, MatrixError
+from .neewer import NeewerBridge, NeewerError
 from .tapo import TapoConfig, TapoError, TapoPlug
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,13 @@ ATV_STATE_DIR = "/data/atv"
 # Elgato Key Light in the Office; persistent host on disk.
 KEYLIGHT_ROOM_ID = "office"
 KEYLIGHT_STATE_DIR = "/data/keylight"
+
+# Neewer BLE lights in the Office (controlled via the Mac-side bridge).
+NEEWER_ROOM_ID = "office"
+NEEWER_LIGHTS = [
+    {"id": "key1", "label": "Neewer 1"},
+    {"id": "key2", "label": "Neewer 2"},
+]
 
 
 @asynccontextmanager
@@ -83,6 +91,12 @@ async def lifespan(app: FastAPI):
     log.info(
         "elgato key light: %s",
         f"host {app.state.keylight.host}" if app.state.keylight.host else "not configured",
+    )
+
+    app.state.neewer = NeewerBridge(os.environ.get("NEEWER_BRIDGE_URL") or None)
+    log.info(
+        "neewer bridge: %s",
+        app.state.neewer.base_url or "not configured",
     )
 
     # Home public networks, used to auto-auth visitors on the same WAN.
@@ -429,6 +443,13 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
             keylight_error = str(e)
             log.warning("keylight state failed: %s", e)
 
+    # Neewer lights (via Mac bridge) — same admin/office gating.
+    show_neewer = is_admin_view and room.id == NEEWER_ROOM_ID
+    neewer: NeewerBridge = request.app.state.neewer
+    neewer_healthy = False
+    if show_neewer:
+        neewer_healthy = await neewer.healthy()
+
     return templates.TemplateResponse(
         request,
         "picker.html",
@@ -448,6 +469,10 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
             "keylight_host": keylight.host,
             "keylight_state": keylight_state,
             "keylight_error": keylight_error,
+            "show_neewer": show_neewer,
+            "neewer_configured": neewer.configured,
+            "neewer_healthy": neewer_healthy,
+            "neewer_lights": NEEWER_LIGHTS,
             "is_admin_view": is_admin_view,
             "back_url": "/admin" if is_admin_view else "/",
         },
@@ -842,5 +867,43 @@ async def keylight_set(
         await kl.set(brightness=brightness, kelvin=kelvin)
     except KeyLightError as e:
         log.warning("keylight set failed: %s", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+# ============================================================ neewer lights
+
+
+def _valid_neewer_id(light_id: str) -> bool:
+    return any(l["id"] == light_id for l in NEEWER_LIGHTS)
+
+
+@app.post("/admin/neewer/{light_id}/power")
+async def neewer_power(request: Request, light_id: str, on: bool = Form(...)):
+    _require_admin(request)
+    if not _valid_neewer_id(light_id):
+        raise HTTPException(404)
+    try:
+        await request.app.state.neewer.power(light_id, on)
+    except NeewerError as e:
+        log.warning("neewer %s power failed: %s", light_id, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/admin/neewer/{light_id}/cct")
+async def neewer_cct(
+    request: Request,
+    light_id: str,
+    brightness: int = Form(...),
+    cct: int = Form(...),
+):
+    _require_admin(request)
+    if not _valid_neewer_id(light_id):
+        raise HTTPException(404)
+    try:
+        await request.app.state.neewer.set_cct(light_id, brightness, cct)
+    except NeewerError as e:
+        log.warning("neewer %s cct failed: %s", light_id, e)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
     return JSONResponse({"ok": True})

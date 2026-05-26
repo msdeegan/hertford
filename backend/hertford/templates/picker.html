@@ -253,6 +253,127 @@
     </div>
   {% endif %}
 
+  {% if show_neewer %}
+    <div class="mt-8 pt-6 border-t border-slate-200">
+      <h2 class="text-sm font-medium uppercase tracking-wide text-slate-500 mb-3">Neewer Lights</h2>
+      {% if not neewer_configured %}
+        <div class="p-4 rounded-2xl bg-slate-100 border border-slate-200 text-sm text-slate-500">
+          Neewer bridge URL not set. Add <code class="font-mono">NEEWER_BRIDGE_URL</code> to
+          <code class="font-mono">.env</code>.
+        </div>
+      {% elif not neewer_healthy %}
+        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          Bridge unreachable. Is the bridge running on the Mac?
+        </div>
+      {% else %}
+        {% for light in neewer_lights %}
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-4 select-none mb-3" data-light="{{ light.id }}">
+            <button
+              type="button"
+              class="nw-toggle w-full p-3 rounded-xl border bg-slate-100 border-slate-200 active:bg-slate-200 transition"
+              data-light="{{ light.id }}"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-base font-semibold">{{ light.label }}</span>
+                <span class="flex items-center gap-2 text-sm font-medium">
+                  <span class="nw-led w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                  <span class="nw-state-text">Tap to turn on / off</span>
+                </span>
+              </div>
+            </button>
+
+            <label class="block">
+              <div class="flex items-baseline justify-between mb-1">
+                <span class="text-sm text-slate-700">Brightness</span>
+                <span class="text-xs text-slate-500 font-mono nw-b-val">50%</span>
+              </div>
+              <input
+                type="range" class="nw-brightness w-full" min="0" max="100" step="1" value="50"
+                data-light="{{ light.id }}"
+              >
+            </label>
+
+            <label class="block">
+              <div class="flex items-baseline justify-between mb-1">
+                <span class="text-sm text-slate-700">Warmth</span>
+                <span class="text-xs text-slate-500 font-mono nw-c-val">4400 K</span>
+              </div>
+              <input
+                type="range" class="nw-cct w-full" min="32" max="56" step="1" value="44"
+                data-light="{{ light.id }}"
+              >
+              <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-400 mt-1">
+                <span>Warm 3200K</span><span>Cool 5600K</span>
+              </div>
+            </label>
+          </div>
+        {% endfor %}
+
+        <script>
+          (function() {
+            // Track on/off per light in JS (the bridge is write-only).
+            var state = {};
+
+            document.querySelectorAll('.nw-toggle').forEach(function(btn) {
+              var id = btn.getAttribute('data-light');
+              state[id] = false;
+              btn.addEventListener('click', function() {
+                var next = !state[id];
+                var fd = new FormData(); fd.append('on', next ? 'true' : 'false');
+                fetch('/admin/neewer/' + id + '/power', { method: 'POST', credentials: 'same-origin', body: fd })
+                  .then(function(r) { return r.json(); })
+                  .then(function(d) {
+                    if (!d.ok) return;
+                    state[id] = next;
+                    btn.classList.toggle('bg-amber-50', next);
+                    btn.classList.toggle('border-amber-200', next);
+                    btn.classList.toggle('bg-slate-100', !next);
+                    btn.classList.toggle('border-slate-200', !next);
+                    var led = btn.querySelector('.nw-led');
+                    led.classList.toggle('bg-amber-500', next);
+                    led.classList.toggle('bg-slate-400', !next);
+                    btn.querySelector('.nw-state-text').textContent =
+                      next ? 'On — tap to turn off' : 'Off — tap to turn on';
+                  });
+              });
+            });
+
+            function postCct(id, brightness, cct) {
+              var fd = new FormData();
+              fd.append('brightness', brightness);
+              fd.append('cct', cct);
+              fetch('/admin/neewer/' + id + '/cct', { method: 'POST', credentials: 'same-origin', body: fd });
+            }
+
+            document.querySelectorAll('.nw-brightness').forEach(function(slider) {
+              var id = slider.getAttribute('data-light');
+              var card = slider.closest('[data-light]');
+              var label = card.querySelector('.nw-b-val');
+              var cctSlider = card.querySelector('.nw-cct');
+              slider.addEventListener('input', function() { label.textContent = slider.value + '%'; });
+              slider.addEventListener('change', function() { postCct(id, slider.value, cctSlider.value); });
+            });
+
+            document.querySelectorAll('.nw-cct').forEach(function(slider) {
+              var id = slider.getAttribute('data-light');
+              var card = slider.closest('[data-light]');
+              var label = card.querySelector('.nw-c-val');
+              var brSlider = card.querySelector('.nw-brightness');
+              function neewerToKelvin(v) {
+                // Neewer 32..56 ≈ 3200K..5600K, linear.
+                return Math.round(3200 + (v - 32) * 100);
+              }
+              slider.addEventListener('input', function() {
+                label.textContent = neewerToKelvin(slider.value) + ' K';
+              });
+              slider.addEventListener('change', function() { postCct(id, brSlider.value, slider.value); });
+            });
+          })();
+        </script>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if show_tapo %}
     <div class="mt-8 pt-6 border-t border-slate-200">
       {% if tapo_configured %}
