@@ -121,7 +121,7 @@ class NeewerLight:
         # fails with "Device with address ... was not found". Do a short
         # rediscovery scan first to refresh the peripheral reference.
         log.info("rediscovering %s (%s)…", self.address, self.name)
-        device = await BleakScanner.find_device_by_address(self.address, timeout=8.0)
+        device = await BleakScanner.find_device_by_address(self.address, timeout=12.0)
         if device is None:
             raise BleakNotFound(
                 f"could not find {self.address} via BLE scan — "
