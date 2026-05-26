@@ -20,6 +20,8 @@ from .atv import discover_lan as discover_atv
 from .config import Config, Room, load_config
 from .gtv import GoogleTV, GTVError
 from .gtv import discover_lan as discover_gtv
+from .keylight import KeyLight, KeyLightError
+from .keylight import discover_lan as discover_keylight
 from .matrix import MatrixClient, MatrixError
 from .tapo import TapoConfig, TapoError, TapoPlug
 
@@ -39,6 +41,10 @@ ATV_SOURCE_ID = "apple-tv"
 # Where each remote's cert/credentials live (mounted from host in compose).
 GTV_STATE_DIR = "/data/gtv"
 ATV_STATE_DIR = "/data/atv"
+
+# Elgato Key Light in the Office; persistent host on disk.
+KEYLIGHT_ROOM_ID = "office"
+KEYLIGHT_STATE_DIR = "/data/keylight"
 
 
 @asynccontextmanager
@@ -68,6 +74,15 @@ async def lifespan(app: FastAPI):
         "apple tv: %s (state at %s)",
         f"paired with {app.state.atv.host}" if app.state.atv.paired else "not paired",
         app.state.atv.state_dir,
+    )
+
+    app.state.keylight = KeyLight(
+        host=os.environ.get("ELGATO_HOST") or None,
+        state_dir=os.environ.get("ELGATO_STATE_DIR", KEYLIGHT_STATE_DIR),
+    )
+    log.info(
+        "elgato key light: %s",
+        f"host {app.state.keylight.host}" if app.state.keylight.host else "not configured",
     )
 
     # Home public networks, used to auto-auth visitors on the same WAN.
@@ -402,6 +417,18 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
     if room.id == TAPO_ROOM_ID:
         tapo_on, tapo_error = await _tapo_state(request)
 
+    # Key light state only fetched for the Office picker, admin view only.
+    keylight_state = None
+    keylight_error = None
+    show_keylight = is_admin_view and room.id == KEYLIGHT_ROOM_ID
+    keylight: KeyLight = request.app.state.keylight
+    if show_keylight and keylight.host:
+        try:
+            keylight_state = await keylight.state()
+        except KeyLightError as e:
+            keylight_error = str(e)
+            log.warning("keylight state failed: %s", e)
+
     return templates.TemplateResponse(
         request,
         "picker.html",
@@ -417,6 +444,10 @@ async def _render_picker(request: Request, room: Room, *, is_admin_view: bool):
             "tapo_error": tapo_error,
             "show_gtv_remote": current is not None and current.id == GTV_SOURCE_ID,
             "show_atv_remote": current is not None and current.id == ATV_SOURCE_ID,
+            "show_keylight": show_keylight,
+            "keylight_host": keylight.host,
+            "keylight_state": keylight_state,
+            "keylight_error": keylight_error,
             "is_admin_view": is_admin_view,
             "back_url": "/admin" if is_admin_view else "/",
         },
@@ -752,3 +783,64 @@ async def admin_room_switch(
     except KeyError:
         raise HTTPException(404)
     return await _do_switch(request, room, source_id, redirect_to=f"/admin/room/{room.id}")
+
+
+# ============================================================ key light
+
+
+_KEYLIGHT_REDIRECT = f"/admin/room/{KEYLIGHT_ROOM_ID}"
+
+
+@app.post("/admin/keylight/discover")
+async def keylight_discover(request: Request):
+    _require_admin(request)
+    try:
+        candidates = await discover_keylight()
+    except Exception as e:
+        log.warning("keylight discover failed: %s", e)
+        candidates = []
+    return JSONResponse({"candidates": candidates})
+
+
+@app.post("/admin/keylight/set-host")
+async def keylight_set_host(request: Request, host: str = Form(...)):
+    _require_admin(request)
+    request.app.state.keylight.set_host(host.strip())
+    return RedirectResponse(_KEYLIGHT_REDIRECT, status_code=303)
+
+
+@app.post("/admin/keylight/forget")
+async def keylight_forget(request: Request):
+    _require_admin(request)
+    request.app.state.keylight.forget()
+    return RedirectResponse(_KEYLIGHT_REDIRECT, status_code=303)
+
+
+@app.post("/admin/keylight/toggle")
+async def keylight_toggle(request: Request):
+    _require_admin(request)
+    kl: KeyLight = request.app.state.keylight
+    try:
+        current = await kl.state()
+        await kl.set(on=not current["on"])
+    except KeyLightError as e:
+        log.warning("keylight toggle failed: %s", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/admin/keylight/set")
+async def keylight_set(
+    request: Request,
+    brightness: int | None = Form(None),
+    kelvin: int | None = Form(None),
+):
+    """Atomic set of brightness and/or colour temperature."""
+    _require_admin(request)
+    kl: KeyLight = request.app.state.keylight
+    try:
+        await kl.set(brightness=brightness, kelvin=kelvin)
+    except KeyLightError as e:
+        log.warning("keylight set failed: %s", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+    return JSONResponse({"ok": True})

@@ -91,6 +91,168 @@
     </div>
   {% endif %}
 
+  {% if show_keylight %}
+    <div class="mt-8 pt-6 border-t border-slate-200">
+      <h2 class="text-sm font-medium uppercase tracking-wide text-slate-500 mb-3">Key Light</h2>
+      {% if not keylight_host %}
+        <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
+          <p class="text-sm text-slate-600">No light configured. Tap to find Elgato Key Lights on the LAN.</p>
+          <button
+            type="button"
+            id="kl-discover-btn"
+            class="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold active:bg-slate-700"
+          >Discover</button>
+          <div id="kl-discover-status" class="text-xs text-slate-500"></div>
+          <form id="kl-pick-form" method="post" action="/admin/keylight/set-host" class="space-y-2 hidden">
+            <select name="host" id="kl-host-select" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-base"></select>
+            <button class="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold active:bg-slate-700">Use this light</button>
+          </form>
+        </div>
+        <script>
+          (function() {
+            var btn = document.getElementById('kl-discover-btn');
+            var status = document.getElementById('kl-discover-status');
+            var form = document.getElementById('kl-pick-form');
+            var select = document.getElementById('kl-host-select');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+              btn.disabled = true;
+              btn.textContent = 'Scanning…';
+              status.textContent = 'This takes a few seconds.';
+              fetch('/admin/keylight/discover', { method: 'POST', credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                  var c = d.candidates || [];
+                  if (!c.length) {
+                    status.textContent = 'No lights found. Make sure the Key Light is on the LAN.';
+                    btn.disabled = false; btn.textContent = 'Try again';
+                    return;
+                  }
+                  select.innerHTML = '';
+                  c.forEach(function(x) {
+                    var o = document.createElement('option');
+                    o.value = x.host; o.textContent = x.name + '  ·  ' + x.host;
+                    select.appendChild(o);
+                  });
+                  status.textContent = 'Found ' + c.length + ' light(s).';
+                  btn.classList.add('hidden');
+                  form.classList.remove('hidden');
+                })
+                .catch(function() {
+                  status.textContent = 'Scan failed.';
+                  btn.disabled = false; btn.textContent = 'Try again';
+                });
+            });
+          })();
+        </script>
+
+      {% elif keylight_error %}
+        <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-sm text-rose-700">
+          {{ keylight_error }}
+          <form method="post" action="/admin/keylight/forget" class="mt-2">
+            <button class="text-xs text-rose-700 underline">Forget {{ keylight_host }}</button>
+          </form>
+        </div>
+
+      {% else %}
+        {% set on = keylight_state.on %}
+        <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-4 select-none">
+          {# Toggle #}
+          <button
+            type="button"
+            id="kl-toggle"
+            class="w-full p-3 rounded-xl border transition
+                   {% if on %}bg-amber-50 border-amber-200 active:bg-amber-100
+                   {% else %}bg-slate-100 border-slate-200 active:bg-slate-200{% endif %}"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-base font-semibold">Light</span>
+              <span class="flex items-center gap-2 text-sm font-medium">
+                <span id="kl-led" class="w-2.5 h-2.5 rounded-full {% if on %}bg-amber-500{% else %}bg-slate-400{% endif %}"></span>
+                <span id="kl-state-text">{% if on %}On — tap to turn off{% else %}Off — tap to turn on{% endif %}</span>
+              </span>
+            </div>
+          </button>
+
+          {# Brightness #}
+          <label class="block">
+            <div class="flex items-baseline justify-between mb-1">
+              <span class="text-sm text-slate-700">Brightness</span>
+              <span class="text-xs text-slate-500 font-mono" id="kl-b-val">{{ keylight_state.brightness }}%</span>
+            </div>
+            <input
+              type="range" id="kl-brightness" min="0" max="100" step="1"
+              value="{{ keylight_state.brightness }}"
+              class="w-full"
+            >
+          </label>
+
+          {# Colour temperature, in Kelvin #}
+          <label class="block">
+            <div class="flex items-baseline justify-between mb-1">
+              <span class="text-sm text-slate-700">Warmth</span>
+              <span class="text-xs text-slate-500 font-mono" id="kl-k-val">{{ keylight_state.kelvin }} K</span>
+            </div>
+            <input
+              type="range" id="kl-kelvin" min="2900" max="7000" step="50"
+              value="{{ keylight_state.kelvin }}"
+              class="w-full"
+            >
+            <div class="flex justify-between text-[10px] uppercase tracking-wide text-slate-400 mt-1">
+              <span>Warm</span><span>Cool</span>
+            </div>
+          </label>
+
+          <form method="post" action="/admin/keylight/forget">
+            <button class="text-xs text-slate-400 active:text-slate-700">Forget light ({{ keylight_host }})</button>
+          </form>
+        </div>
+
+        <script>
+          (function() {
+            var toggle = document.getElementById('kl-toggle');
+            var led = document.getElementById('kl-led');
+            var stateText = document.getElementById('kl-state-text');
+            var br = document.getElementById('kl-brightness');
+            var brVal = document.getElementById('kl-b-val');
+            var kv = document.getElementById('kl-kelvin');
+            var kvVal = document.getElementById('kl-k-val');
+
+            var on = {{ 'true' if on else 'false' }};
+
+            function refreshToggleStyle() {
+              toggle.classList.toggle('bg-amber-50', on);
+              toggle.classList.toggle('border-amber-200', on);
+              toggle.classList.toggle('bg-slate-100', !on);
+              toggle.classList.toggle('border-slate-200', !on);
+              led.classList.toggle('bg-amber-500', on);
+              led.classList.toggle('bg-slate-400', !on);
+              stateText.textContent = on ? 'On — tap to turn off' : 'Off — tap to turn on';
+            }
+
+            toggle.addEventListener('click', function() {
+              fetch('/admin/keylight/toggle', { method: 'POST', credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) { if (d.ok) { on = !on; refreshToggleStyle(); } });
+            });
+
+            // Debounced slider — fire only on release (change event) to avoid spamming the bulb.
+            br.addEventListener('input', function() { brVal.textContent = br.value + '%'; });
+            br.addEventListener('change', function() {
+              var fd = new FormData(); fd.append('brightness', br.value);
+              fetch('/admin/keylight/set', { method: 'POST', credentials: 'same-origin', body: fd });
+            });
+            kv.addEventListener('input', function() { kvVal.textContent = kv.value + ' K'; });
+            kv.addEventListener('change', function() {
+              var fd = new FormData(); fd.append('kelvin', kv.value);
+              fetch('/admin/keylight/set', { method: 'POST', credentials: 'same-origin', body: fd });
+            });
+          })();
+        </script>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if show_tapo %}
     <div class="mt-8 pt-6 border-t border-slate-200">
       {% if tapo_configured %}
