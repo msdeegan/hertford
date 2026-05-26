@@ -20,7 +20,7 @@
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
-  <div class="max-w-md mx-auto px-4 py-6 pb-24">
+  <div class="max-w-md mx-auto px-4 pb-24" style="padding-top: calc(env(safe-area-inset-top) + 1.5rem);">
     {% block body %}{% endblock %}
   </div>
 
@@ -46,6 +46,61 @@
   </div>
 
   <script>
+    // Pull-to-refresh — iOS standalone PWAs don't have it natively, and our
+    // overscroll-behavior:none disables it on Android Chrome.
+    (function() {
+      var startY = 0;
+      var pulling = false;
+      var ready = false;
+      var THRESHOLD = 70;
+
+      var indicator = document.createElement('div');
+      indicator.style.cssText = 'position:fixed;top:0;left:0;right:0;height:0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;pointer-events:none;z-index:60;background:rgba(248,250,252,0.9);backdrop-filter:blur(6px);transition:none;';
+      indicator.innerHTML = '<div id="ptr-label" style="padding:14px;color:#64748b;font-size:13px;font-weight:500;">Pull to refresh</div>';
+      document.body.appendChild(indicator);
+      var label = indicator.querySelector('#ptr-label');
+
+      document.addEventListener('touchstart', function(e) {
+        if (window.scrollY <= 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+          ready = false;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', function(e) {
+        if (!pulling) return;
+        var dy = e.touches[0].clientY - startY;
+        if (dy <= 0) {
+          indicator.style.height = '0';
+          return;
+        }
+        var h = Math.min(dy * 0.5, THRESHOLD + 20);
+        indicator.style.height = h + 'px';
+        if (dy >= THRESHOLD && !ready) {
+          ready = true;
+          label.textContent = 'Release to refresh';
+        } else if (dy < THRESHOLD && ready) {
+          ready = false;
+          label.textContent = 'Pull to refresh';
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', function() {
+        if (!pulling) return;
+        pulling = false;
+        if (ready) {
+          label.textContent = 'Refreshing…';
+          indicator.style.height = '50px';
+          setTimeout(function() { location.reload(); }, 80);
+        } else {
+          indicator.style.transition = 'height 0.2s';
+          indicator.style.height = '0';
+          setTimeout(function() { indicator.style.transition = 'none'; }, 220);
+        }
+      });
+    })();
+
     (function() {
       var banner = document.getElementById('install-banner');
       var btn = document.getElementById('install-btn');
