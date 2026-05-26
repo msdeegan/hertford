@@ -19,4 +19,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"
 
-CMD ["uvicorn", "hertford.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
+# No --proxy-headers: nothing in the app derives auth from request.client.host
+# or X-Forwarded-For. Home-network checks read CF-Connecting-IP directly, and
+# Cloudflare strips client-supplied Cf-* headers at the edge. Trusting
+# arbitrary X-Forwarded-* would only widen the surface for spoofing if the
+# container were ever exposed beyond the docker bridge.
+CMD ["uvicorn", "hertford.main:app", "--host", "0.0.0.0", "--port", "8000"]

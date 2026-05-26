@@ -6,8 +6,10 @@ import asyncio
 import logging
 import os
 import secrets as secrets_mod
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import monotonic
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -233,9 +235,13 @@ if not os.environ.get("SECRET_KEY"):
 app.add_middleware(
     SessionMiddleware,
     secret_key=_secret,
-    same_site="lax",
+    # Strict prevents the session cookie being sent on cross-site requests
+    # entirely — our primary CSRF defence. Users always start at the root,
+    # so the usual Strict downside (deep links from external sites) doesn't
+    # apply.
+    same_site="strict",
     https_only=False,  # cloudflared terminates TLS; the container sees HTTP
-    max_age=60 * 60 * 24 * 30,
+    max_age=60 * 60 * 24 * 7,
 )
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -289,6 +295,30 @@ def _require_guest(request: Request) -> RedirectResponse | None:
 def _require_admin(request: Request) -> None:
     if not auth.is_admin(request):
         raise HTTPException(status_code=403, detail="admin required")
+
+
+# /login brute-force guard. In-memory sliding window, per CF-Connecting-IP.
+# Survives only while the process lives — that's fine; if the container
+# restarts, an attacker still has to start over from a clean state.
+_LOGIN_RATE_LIMIT = 5
+_LOGIN_RATE_WINDOW_S = 60
+_login_attempts: dict[str, deque[float]] = {}
+
+
+def _login_client_ip(request: Request) -> str:
+    return request.headers.get("CF-Connecting-IP") or "unknown"
+
+
+def _login_rate_limited(request: Request) -> bool:
+    ip = _login_client_ip(request)
+    now = monotonic()
+    attempts = _login_attempts.setdefault(ip, deque())
+    while attempts and attempts[0] < now - _LOGIN_RATE_WINDOW_S:
+        attempts.popleft()
+    if len(attempts) >= _LOGIN_RATE_LIMIT:
+        return True
+    attempts.append(now)
+    return False
 
 
 def _room_visible(room: Room, request: Request) -> bool:
@@ -347,16 +377,22 @@ async def icon() -> "Response":
 
 
 @app.get("/whoami")
-async def whoami(request: Request) -> dict:
-    """Debug: shows what the app thinks the request looks like."""
+async def whoami(request: Request):
+    """Debug: shows what the app thinks the request looks like.
+
+    Authed-only — otherwise it leaks the cached home networks and the home
+    IP to anyone probing the URL."""
+    if redir := _require_guest(request):
+        return redir
     nets = getattr(request.app.state, "home_networks", []) or []
-    return {
+    return JSONResponse({
         "cf_connecting_ip": request.headers.get("CF-Connecting-IP"),
         "x_forwarded_for": request.headers.get("X-Forwarded-For"),
         "home_networks_cached": [str(n) for n in nets],
         "on_home_network": auth.is_on_home_network(request),
         "guest_authed": auth.is_guest_authed(request),
-    }
+        "admin": auth.is_admin(request),
+    })
 
 
 @app.get("/api/status")
@@ -399,11 +435,13 @@ async def login_submit(
     next: str = Form("/"),
 ) -> RedirectResponse:
     cfg = _cfg(request)
-    if not auth.check_guest_password(password, cfg.guest_password):
-        return RedirectResponse(f"/login?error=1&next={next}", status_code=303)
-    auth.grant_guest(request)
-    # only redirect to internal paths
     safe_next = next if next.startswith("/") and not next.startswith("//") else "/"
+    if _login_rate_limited(request):
+        log.warning("login rate-limit hit from %s", _login_client_ip(request))
+        return RedirectResponse(f"/login?error=rate&next={safe_next}", status_code=303)
+    if not auth.check_guest_password(password, cfg.guest_password):
+        return RedirectResponse(f"/login?error=1&next={safe_next}", status_code=303)
+    auth.grant_guest(request)
     return RedirectResponse(safe_next, status_code=303)
 
 
