@@ -267,7 +267,7 @@
         </div>
       {% else %}
         {% for light in neewer_lights %}
-          <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-4 select-none mb-3" data-light="{{ light.id }}">
+          <div class="nw-card p-4 rounded-2xl bg-white border border-slate-200 space-y-4 select-none mb-3" data-light="{{ light.id }}">
             <button
               type="button"
               class="nw-toggle w-full p-3 rounded-xl border bg-slate-100 border-slate-200 active:bg-slate-200 transition"
@@ -345,28 +345,25 @@
               fetch('/admin/neewer/' + id + '/cct', { method: 'POST', credentials: 'same-origin', body: fd });
             }
 
-            document.querySelectorAll('.nw-brightness').forEach(function(slider) {
-              var id = slider.getAttribute('data-light');
-              var card = slider.closest('[data-light]');
-              var label = card.querySelector('.nw-b-val');
-              var cctSlider = card.querySelector('.nw-cct');
-              slider.addEventListener('input', function() { label.textContent = slider.value + '%'; });
-              slider.addEventListener('change', function() { postCct(id, slider.value, cctSlider.value); });
-            });
+            function neewerToKelvin(v) {
+              // Neewer 32..56 ≈ 3200K..5600K, linear.
+              return Math.round(3200 + (v - 32) * 100);
+            }
 
-            document.querySelectorAll('.nw-cct').forEach(function(slider) {
-              var id = slider.getAttribute('data-light');
-              var card = slider.closest('[data-light]');
-              var label = card.querySelector('.nw-c-val');
-              var brSlider = card.querySelector('.nw-brightness');
-              function neewerToKelvin(v) {
-                // Neewer 32..56 ≈ 3200K..5600K, linear.
-                return Math.round(3200 + (v - 32) * 100);
-              }
-              slider.addEventListener('input', function() {
-                label.textContent = neewerToKelvin(slider.value) + ' K';
+            document.querySelectorAll('.nw-card').forEach(function(card) {
+              var id = card.dataset.light;
+              var br = card.querySelector('.nw-brightness');
+              var brLabel = card.querySelector('.nw-b-val');
+              var cct = card.querySelector('.nw-cct');
+              var cctLabel = card.querySelector('.nw-c-val');
+
+              br.addEventListener('input', function() { brLabel.textContent = br.value + '%'; });
+              br.addEventListener('change', function() { postCct(id, br.value, cct.value); });
+
+              cct.addEventListener('input', function() {
+                cctLabel.textContent = neewerToKelvin(cct.value) + ' K';
               });
-              slider.addEventListener('change', function() { postCct(id, brSlider.value, slider.value); });
+              cct.addEventListener('change', function() { postCct(id, br.value, cct.value); });
             });
           })();
         </script>
