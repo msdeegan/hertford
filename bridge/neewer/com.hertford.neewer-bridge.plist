@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd Agent — starts the Neewer BLE→HTTP bridge on login.
+  Install via ./install-launchd.sh (substitutes @@HERTFORD_DIR@@).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.hertford.neewer-bridge</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@@HERTFORD_DIR@@/bridge/neewer/.venv/bin/python</string>
+        <string>@@HERTFORD_DIR@@/bridge/neewer/neewer_bridge.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>@@HERTFORD_DIR@@/bridge/neewer</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8765</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Don't hammer the system if it's crashing in a loop. -->
+    <key>ThrottleInterval</key>
+    <integer>15</integer>
+
+    <key>StandardOutPath</key>
+    <string>@@HERTFORD_DIR@@/bridge/neewer/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>@@HERTFORD_DIR@@/bridge/neewer/launchd.err.log</string>
+
+    <!-- Inherit the user's PATH so /usr/local etc. resolve. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -82,8 +82,37 @@ tweaking for your specific model — see `cmd_*` functions in
 `neewer_bridge.py` and cross-reference with
 [NeewerLite-Python](https://github.com/taburineagle/NeewerLite-Python).
 
-## Auto-start on login (later)
+## Auto-start on login
 
-Once the manual `python neewer_bridge.py` workflow proves reliable, we'll
-add a `launchd` plist (under `~/Library/LaunchAgents/`) that starts it on
-login so you don't have to remember.
+Install the bundled `launchd` Agent so the bridge starts whenever you log
+in to the Mac (and restarts itself if it crashes):
+
+```bash
+cd bridge/neewer
+./install-launchd.sh
+```
+
+The script:
+- substitutes the repo's absolute path into `com.hertford.neewer-bridge.plist`,
+- writes the result to `~/Library/LaunchAgents/`,
+- `launchctl load`s it immediately so you don't have to log out/in.
+
+It expects `bridge/neewer/.venv/bin/python` to already exist (see *Install*
+above) — that's how Bluetooth permission stays attached to the same
+interpreter you granted it to during manual testing.
+
+Useful commands:
+
+```bash
+# is it running?
+launchctl list | grep neewer
+
+# tail logs
+tail -f bridge/neewer/launchd.{out,err}.log
+
+# stop + remove
+./install-launchd.sh uninstall
+```
+
+If you move the repo, re-run `./install-launchd.sh` from the new location
+to refresh the absolute path baked into the plist.
