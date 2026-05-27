@@ -143,19 +143,11 @@
 
     <div class="grid grid-cols-3 gap-3 mb-4" id="atv-navrow">
       <button data-key="menu" class="{{ btn_cls }} text-base font-medium">Back</button>
-      <button data-key="play_pause" class="{{ btn_cls }}">
-        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M9 10h.01M15 10h.01"/></svg>
+      <button data-key="play_pause" class="{{ btn_cls }} flex-col gap-0.5">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <span class="text-[10px] uppercase tracking-wide text-slate-500">Play / Pause</span>
       </button>
       <button data-key="home" class="{{ btn_cls }} text-base font-medium">TV</button>
-    </div>
-
-    <div class="grid grid-cols-2 gap-3" id="atv-volrow">
-      <button data-key="volume_down" class="{{ btn_cls }}">
-        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9.354a4 4 0 010 5.292M5 9v6h4l5 5V4L9 9H5z"/></svg>
-      </button>
-      <button data-key="volume_up" class="{{ btn_cls }}">
-        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5 9v6h4l5 5V4L9 9H5z"/></svg>
-      </button>
     </div>
 
     <div class="mt-8 pt-4 border-t border-slate-200">
@@ -184,7 +176,7 @@
             });
           });
         }
-        ['atv-dpad', 'atv-navrow', 'atv-volrow'].forEach(bind);
+        ['atv-dpad', 'atv-navrow'].forEach(bind);
       })();
     </script>
   {% endif %}
